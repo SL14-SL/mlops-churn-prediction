@@ -1,9 +1,9 @@
 environment: dev
-project_name: demand-forecasting-mlops
+project_name: churn-prediction-mlops
 random_seed: 42
 
 model:
-  registry_name: demand-forecasting-model-dev
+  registry_name: churn-prediction-model-dev
 
 tracking:
   mlflow_tracking_uri: http://127.0.0.1:5000
