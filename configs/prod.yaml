@@ -1,9 +1,9 @@
 environment: prod
-project_name: mlops-demand-forecasting
+project_name: churn-prediction-mlops
 random_seed: 42
 
 model:
-  registry_name: ${MODEL_REGISTRY_NAME:-mlops-demand-forecasting}
+  registry_name: ${MODEL_REGISTRY_NAME:-churn-prediction-model}
 
 tracking:
   mlflow_tracking_uri: ${MLFLOW_TRACKING_URI}
