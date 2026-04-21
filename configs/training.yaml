@@ -1,67 +1,74 @@
 project:
-  name: mlops-demand-forecasting
-  domain: forecasting
+  name: mlops-churn-prediction
+  domain: prediction
   schema_version: v1
 
 model:
-  type: xgboost
+  type: sklearn_gb
   params:
-    n_estimators: 300
-    max_depth: 8
+    n_estimators: 200
+    max_depth: 3
     learning_rate: 0.05
-    subsample: 0.8
-    tree_method: hist
-    enable_categorical: true
+
 
 data:
-  target_column: Sales
+  target_column: Churn
   known_targets: 
-    - Sales
-    - Customers
-  time_column: Date
+    - Churn
+  time_column: null
   id_columns:
-    - Store
+    - customerID
   primary_keys:
-    - Store
-    - Date
+    - []
 
   feature_sources:
     train:
       path: train.parquet
-    store:
-      path: store.parquet
-      merge_on:
-        - Store
-      how: left
 
 training:
   validation_strategy: holdout
   test_size: 0.2
-  target_transformation: log1p
+  target_transformation: none
 
 metrics:
-  primary: rmse
+  primary: f1_score
+  secondary:
+    - roc_auc
+    - accuracy
   evaluate_on_original_scale: true
 
 features:
+  features:
+  # Define which steps from src/data/features/core.py should run
   enabled_steps:
-    - sort
-    - temporal
-    - lags
-    - competition
-    - promo
-    - cast_categoricals
-    - drop_technical
-    - drop_configured
+    - handle_missing_values
+    - cast_numeric_types
+    - encode_categoricals
+    - drop_unnecessary_columns
 
-  lag_features:
-    lags: [1,7,14,28]
-    rolling_windows: [7,14,28]
+  # These columns need to be cast from String to Float (Notebook logic)
+  cast_to_numeric:
+    - TotalCharges
 
-  technical_drop_columns:
-    - CompetitionOpenSinceMonth
-    - CompetitionOpenSinceYear
-    - Promo2SinceWeek
-    - Promo2SinceYear
+  # Categorical features for One-Hot-Encoding
+  categorical_columns:
+    - gender
+    - SeniorCitizen
+    - Partner
+    - Dependents
+    - PhoneService
+    - MultipleLines
+    - InternetService
+    - OnlineSecurity
+    - OnlineBackup
+    - DeviceProtection
+    - TechSupport
+    - StreamingTV
+    - StreamingMovies
+    - Contract
+    - PaperlessBilling
+    - PaymentMethod
 
-  drop_columns: []
+  # Columns that add no value to the model
+  drop_columns:
+    - customerID
