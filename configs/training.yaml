@@ -4,7 +4,7 @@ project:
   schema_version: v1
 
 model:
-  type: sklearn_gb
+  type: gradient_boosting
   params:
     n_estimators: 200
     max_depth: 3

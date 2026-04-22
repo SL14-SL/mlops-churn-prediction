@@ -1,40 +1,37 @@
 import mlflow.sklearn
 import mlflow.xgboost
 import xgboost as xgb
-
 from copy import deepcopy
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.linear_model import LinearRegression
-
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.linear_model import LogisticRegression
 
 MODEL_REGISTRY = {
-    "xgboost": xgb.XGBRegressor,
-    "random_forest": RandomForestRegressor,
-    "linear_regression": LinearRegression,
+    "xgboost": xgb.XGBClassifier,
+    "random_forest": RandomForestClassifier,
+    "gradient_boosting": GradientBoostingClassifier,
+    "logistic_regression": LogisticRegression,
 }
 
 MODEL_LOGGERS = {
     "xgboost": mlflow.xgboost.log_model,
     "random_forest": mlflow.sklearn.log_model,
-    "linear_regression": mlflow.sklearn.log_model,
+    "gradient_boosting": mlflow.sklearn.log_model,
+    "logistic_regression": mlflow.sklearn.log_model,
 }
-
 
 def apply_repro_defaults(model_type: str, params: dict, seed: int | None) -> dict:
     resolved = deepcopy(params)
-
     if seed is None:
         return resolved
 
+    # Standardisation of random seeds for different frameworks
     if model_type == "xgboost":
         resolved.setdefault("random_state", seed)
-        resolved.setdefault("seed", seed)
-
-    if model_type == "random_forest":
+    
+    if model_type in ["random_forest", "gradient_boosting", "logistic_regression"]:
         resolved.setdefault("random_state", seed)
 
     return resolved
-
 
 def build_model(model_cfg: dict, *, seed: int | None = None):
     model_type = model_cfg["type"]
@@ -57,8 +54,8 @@ def fit_model(model, model_type: str, X_train, y_train, X_val, y_val):
         )
         return
 
+    # Standard scikit-learn fit the rest
     model.fit(X_train, y_train)
-
 
 def log_model_by_type(
     model,
@@ -70,18 +67,14 @@ def log_model_by_type(
     if model_type not in MODEL_LOGGERS:
         raise ValueError(f"Unsupported model type for logging: {model_type}")
 
-    kwargs = {
-        "metadata": metadata or {},
-    }
-
+    kwargs = {"metadata": metadata or {}}
     if input_example is not None:
         kwargs["input_example"] = input_example
-
     if signature is not None:
         kwargs["signature"] = signature
 
     MODEL_LOGGERS[model_type](
         model,
-        name="model",
+        "model", 
         **kwargs,
     )
