@@ -9,18 +9,27 @@ TRAIN_CFG = load_config("training.yaml")
 
 
 def build_drop_columns(config: dict) -> list[str]:
-    """Build feature drop list from config without duplicates."""
-    data_cfg = TRAIN_CFG.get("data", {})
-    feature_cfg = TRAIN_CFG.get("features", {})
+    """
+    Build feature drop list from config without duplicates.
+    Ensures all names are lowercase to match the preprocessed data.
+    """
+   
+    data_cfg = config.get("data", {})
+    feature_cfg = config.get("features", {})
 
-    target_column = data_cfg["target_column"]
+    target_column = data_cfg.get("target_column")
     known_targets = data_cfg.get("known_targets", [])
     time_column = data_cfg.get("time_column")
     configured_drop_columns = feature_cfg.get("drop_columns", [])
 
-    drop_columns = configured_drop_columns + known_targets + [target_column]
-
+    raw_drop_list = configured_drop_columns + known_targets
+    
+    if target_column:
+        raw_drop_list.append(target_column)
     if time_column:
-        drop_columns.append(time_column)
+        raw_drop_list.append(time_column)
+
+   
+    drop_columns = [col.lower().replace(" ", "_") for col in raw_drop_list if col]
 
     return list(dict.fromkeys(drop_columns))

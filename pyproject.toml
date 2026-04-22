@@ -33,6 +33,7 @@ dependencies = [
     "pyasn1>=0.6.3",
     "prometheus-client==0.23.1",
     "pillow>=12.2.0",
+    "seaborn>=0.13.2",
 ]
 
 [tool.setuptools.packages.find]
