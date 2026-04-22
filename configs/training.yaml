@@ -41,10 +41,9 @@ features:
   features:
   # Define which steps from src/data/features/core.py should run
   enabled_steps:
-    - handle_missing_values
     - cast_numeric_types
     - encode_categoricals
-    - drop_unnecessary_columns
+    - drop_configured
 
   # These columns need to be cast from String to Float (Notebook logic)
   cast_to_numeric:
