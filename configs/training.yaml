@@ -44,6 +44,7 @@ features:
     - cast_numeric_types
     - encode_categoricals
     - drop_configured
+    - clean_names
 
   # These columns need to be cast from String to Float (Notebook logic)
   cast_to_numeric:

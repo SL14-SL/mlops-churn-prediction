@@ -1,75 +1,60 @@
 import pandas as pd
 import os
+from sklearn.model_selection import train_test_split
 from src.configs.loader import load_config, get_path
 from src.utils.logger import get_logger
 
-# Initialize logger
 logger = get_logger(__name__)
 
-# Load environment config
-CFG = load_config()
-
+TRAIN_CFG = load_config("training.yaml")
 FEATURES = get_path("features")
 SPLITS = get_path("splits")
 
-def split(is_drift_run: bool = False):
+def split():
     """
-    Implements a sliding window approach with dynamic validation sizing.
-    If a drift is detected, we use an 'Emergency Window' (2 days) 
-    to force new patterns into the training set faster.
+    Implements a Stratified Shuffle Split to ensure balanced 
+    class distribution (Churn vs No-Churn) in train and validation sets.
     """
     input_file = f"{FEATURES}/features.parquet"
     
+    if not os.path.exists(input_file):
+        logger.error(f"Feature file not found: {input_file}")
+        return
+
     logger.info(f"Loading features for splitting from: {input_file}")
     df = pd.read_parquet(input_file)
-    df["Date"] = pd.to_datetime(df["Date"])
-    df = df.sort_values("Date").reset_index(drop=True)
 
-    # 1. Define the overall window (last 182 days / 6 months)
-    max_date = df["Date"].max()
-    min_date = df["Date"].min()
-    start_date = min_date
-    # start_date = max_date - pd.Timedelta(days=182)
+    # 1. Resolve configuration
+    target_column = TRAIN_CFG.get("data", {}).get("target_column", "churn")
+    # Clean name as applied in build_features (lowercase, replaces spaces with underscores)
+    target_column = target_column.lower().replace(" ", "_")
     
-    # Filter for recent data only to avoid obsolete patterns
-    df = df[df["Date"] >= start_date].copy()
-    logger.info(f"Sliding window range: {start_date.date()} to {max_date.date()}")
+    test_size = TRAIN_CFG.get("training", {}).get("test_size", 0.2)
+    random_state = TRAIN_CFG.get("training", {}).get("random_state", 42)
 
-    # 2. Dynamic Validation Window
-    # Shrink window during drift to accelerate learning from new patterns
-    if is_drift_run:
-        logger.warning("Drift detected! Applying Emergency Window logic.")
-        # Emergency logic: Ensure we have at least 2 open days for validation
-        potential_val_data = df[df["Date"] > (max_date - pd.Timedelta(days=7))]
-        open_days = potential_val_data[potential_val_data["Open"] == 1]["Date"].unique()
-        open_days = sorted(open_days, reverse=True)
-        
-        if len(open_days) >= 2:
-            cutoff_date = open_days[1] 
-        else:
-            cutoff_date = max_date - pd.Timedelta(days=2)
-    else:
-        logger.info("Applying normal validation window (14 days).")
-        cutoff_date = max_date - pd.Timedelta(days=14)
+    if target_column not in df.columns:
+        logger.error(f"Target column '{target_column}' not found in features. Available: {df.columns.tolist()}")
+        return
 
-    train = df[df["Date"] < cutoff_date]
-    val = df[df["Date"] >= cutoff_date]
+    # 2. Perform Stratified Split
+    # This is crucial for Churn to maintain the same % of churners in both sets
+    logger.info(f"Performing stratified split (test_size={test_size}, random_state={random_state})")
+    
+    train, val = train_test_split(
+        df,
+        test_size=test_size,
+        random_state=random_state,
+        stratify=df[target_column] # Important for imbalanced classification
+    )
 
-    # Save the splits
+    # 3. Save the splits
     os.makedirs(SPLITS, exist_ok=True)
     train.to_parquet(f"{SPLITS}/train.parquet", index=False)
     val.to_parquet(f"{SPLITS}/val.parquet", index=False)
     
-    status = "EMERGENCY" if is_drift_run else "NORMAL"
-    train_start = train["Date"].min().date()
-    train_end = train["Date"].max().date()
-    val_days = val["Date"].nunique()
-    
-    # Final summary of the split operation
-    logger.info(f"[{status}] Data split complete.")
-    logger.info(f"[{status}] Train set: {train_start} to {train_end} ({len(train)} rows)")
-    logger.info(f"[{status}] Val set: {val_days} days starting {val['Date'].min().date()} ({len(val)} rows)")
+    logger.info(f"Data split complete. Train rows: {len(train)} | Val rows: {len(val)}")
+    logger.info(f"Class distribution (Train):\n{train[target_column].value_counts(normalize=True)}")
+    logger.info(f"Class distribution (Val):\n{val[target_column].value_counts(normalize=True)}")
 
 if __name__ == "__main__":
-    # Default to normal split if called directly
-    split(is_drift_run=False)
+    split()
