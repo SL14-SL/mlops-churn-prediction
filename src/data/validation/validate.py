@@ -1,49 +1,38 @@
 import pandas as pd
 import pandera.pandas as pa
 from pandera.typing import DataFrame
+from src.data.validation.churn_schema import ChurnSchema
+from src.utils.logger import get_logger
 
-from src.data.validation.forecasting_schema import SalesSchema, StoreSchema
-from src.data.validation.inference_schema import inference_schema
+logger = get_logger(__name__)
 
-def _coerce_datetime_if_present(df: pd.DataFrame, column_name: str) -> pd.DataFrame:
+def validate_train(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Ensure datetime-like columns are parsed before Pandera validation.
+    Main validation function for churn data (train and batch).
     """
-    df = df.copy()
+    try:
+        # Pandera performs type checking and value range validation
+        validated_df = ChurnSchema.validate(df)
+        logger.info("Churn data validation successful.")
+        return validated_df
+    except Exception as e:
+        logger.error(f"Validation failed: {e}")
+        raise
 
-    if column_name in df.columns and not pd.api.types.is_datetime64_any_dtype(df[column_name]):
-        df[column_name] = pd.to_datetime(df[column_name])
-
-    return df
-
-def validate_inference(df): 
-    validated = inference_schema.validate(df.copy())
-
-    if "Sales" in validated.columns: 
-        raise ValueError("Inference input must not contain target column 'Sales'")
+def validate_inference(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Validate data incoming via API for prediction.
+    Target column 'Churn' should be absent here.
+    """
+    # Create a copy of the schema but without the target column for inference
+    inference_schema = ChurnSchema.to_schema().remove_columns(["Churn"])
     
-    if validated.empty:
-        raise ValueError("Inference input is empty.")
+    try:
+        validated = inference_schema.validate(df)
+        if validated.empty:
+            raise ValueError("Inference input is empty.")
+        return validated
+    except Exception as e:
+        logger.error(f"Inference validation failed: {e}")
+        raise
 
-    if "Store" in validated.columns and validated["Store"].isna().any():
-        raise ValueError("Inference input contains missing Store values.")
-    
-    return validated
-
-
-
-@pa.check_types
-def validate_train(df: pd.DataFrame) -> DataFrame[SalesSchema]:
-    """
-    Validate forecasting train / inference rows against SalesSchema.
-    """
-    df = _coerce_datetime_if_present(df, "Date")
-    return df
-
-
-@pa.check_types
-def validate_store(df: pd.DataFrame) -> DataFrame[StoreSchema]:
-    """
-    Validate static store metadata against StoreSchema.
-    """
-    return df

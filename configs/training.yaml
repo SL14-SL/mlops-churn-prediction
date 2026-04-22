@@ -23,7 +23,7 @@ data:
 
   feature_sources:
     train:
-      path: train.parquet
+      path: Telco-Customer-Churn.csv
 
 training:
   validation_strategy: holdout

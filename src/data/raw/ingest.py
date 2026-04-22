@@ -2,8 +2,9 @@ import pandas as pd
 import os
 import shutil
 import gcsfs
+from sklearn.model_selection import train_test_split
 from src.configs.loader import load_config, get_path
-from src.data.validation.validate import validate_store, validate_train
+from src.data.validation.validate import validate_train
 from src.utils.logger import get_logger
 
 # Initialize project-specific logger
@@ -11,60 +12,47 @@ logger = get_logger(__name__)
 
 def ingest(): 
     """
-    Main ingestion task: 
-    - Loads raw data and validates it.
-    - Performs a chronological 90/10 split for simulation.
-    - Merges new batches with individual validation and quarantine logic.
+    Main ingestion task for Churn Prediction: 
+    - Loads raw Telco data.
+    - Performs a random 80/20 split 
+    - Handles new batches with quarantine logic.
     """
-    # Resolve paths inside the function for better testability (Late Binding)
-    #cfg = load_config()
     gcp_cfg = load_config("gcp.yaml")
+    training_cfg = load_config("training.yaml")
+    
     raw_path = get_path("raw_data")
     validated_path = get_path("validated_data")
     
     env = os.getenv("APP_ENV", "dev")
-    logger.info(f"Starting ingestion process. Source: {raw_path} | Env: {env}")
+    logger.info(f"Starting Churn ingestion. Source: {raw_path} | Env: {env}")
     
-    # 1. Load original Kaggle source files
+    # 1. Load original source file
     try:
-        train_full = pd.read_csv(f"{raw_path}/train.csv", parse_dates=["Date"], dtype={"StateHoliday": str})
-        store = pd.read_csv(f"{raw_path}/store.csv")
-        logger.info("Base source files loaded successfully.")
+        data_file = training_cfg["data"]["feature_sources"]["train"]["path"]
+        df_full = pd.read_csv(f"{raw_path}/{data_file}")
+        logger.info(f"Base file {data_file} loaded successfully.")
     except Exception as e:
-        logger.error(f"Failed to load base source files: {e}")
+        logger.error(f"Failed to load base source file: {e}")
         return
 
-    # 2. Initial Validation
-    validate_store(store)
-    validate_train(train_full)
-    logger.info("Initial validation of base data passed.")
+    # 2. Initial Validation (Checks for required columns like customerID, Churn)
+    validate_train(df_full)
+    logger.info("Initial validation passed.")
 
-
-    # 3. Chronological 90/10 Split on unique dates
-    train_full = train_full.sort_values("Date", ascending=True).copy()
-    train_full["Date"] = pd.to_datetime(train_full["Date"], errors="coerce")
-
-    if train_full["Date"].isna().any():
-        raise ValueError("Found invalid dates in training data during chronological split.")
-
-    unique_dates = sorted(train_full["Date"].dropna().unique())
-    date_split_idx = int(len(unique_dates) * 0.9)
-    date_split_idx = min(max(date_split_idx, 0), len(unique_dates) - 1)
-
-    split_date = pd.Timestamp(unique_dates[date_split_idx])
-
-    train_base = train_full[train_full["Date"] < split_date].copy()
-    sim_truth = train_full[train_full["Date"] >= split_date].copy()
+    # 3. Random Split 
+    test_size = training_cfg["training"].get("test_size", 0.2)
+    train_base, sim_truth = train_test_split(
+        df_full, 
+        test_size=test_size, 
+        random_state=42,
+        stratify=df_full[training_cfg["data"]["target_column"]]
+    )
 
     logger.info(
-        "Chronological date-based split completed | "
-        f"split_date={split_date.date()} | "
-        f"train_rows={len(train_base)} | sim_rows={len(sim_truth)} | "
-        f"train_max_date={train_base['Date'].max().date() if not train_base.empty else None} | "
-        f"sim_min_date={sim_truth['Date'].min().date() if not sim_truth.empty else None}"
+        f"Random split completed | train_rows={len(train_base)} | sim_rows={len(sim_truth)}"
     )
     
-    # Save simulation source if missing
+    # Save simulation source (Ground Truth for later Drift/Performance tests)
     sim_source_path = f"{raw_path}/simulation_ground_truth.csv"
     
     # Check if file exists (works for local and GCS)
@@ -76,71 +64,51 @@ def ingest():
         file_exists = os.path.exists(sim_source_path)
 
     if not file_exists:
-        # Pandas can write directly to gs:// if gcsfs is installed
         sim_truth.to_csv(sim_source_path, index=False)
-        logger.info(f"Created simulation source: {sim_source_path}")
-    # 4. Collect Incremental Batches with Quarantine Logic
-    final_train = train_base
+        logger.info(f"Created simulation ground truth: {sim_source_path}")
+
+    # 4. Collect Incremental Batches 
     new_batches_found = []
-    
     batch_dir = f"{raw_path}/new_batches"
     quarantine_dir = f"{raw_path}/quarantine"
 
-    # Cloud Ingestion (GCS)
-    if env == "prod" or raw_path.startswith("gs://"):
-        fs = gcsfs.GCSFileSystem()
-        bucket_name = gcp_cfg["gcp"]["gcs"]["bucket_name"]
-        batch_pattern = f"gs://{bucket_name}/data/raw/new_batches/*.csv"
-        try:
-            batch_files = fs.glob(batch_pattern)
-            for f in batch_files:
-                try:
-                    # Using gsfs to read cloud batches
-                    batch_df = pd.read_csv(f"gs://{f}", parse_dates=["Date"], dtype={"StateHoliday": str})
-                    validate_train(batch_df)
-                    new_batches_found.append(batch_df)
-                except Exception as e:
-                    logger.warning(f"Cloud Batch '{f}' failed validation: {e}")
-        except Exception as e:
-            logger.error(f"Error accessing GCS bucket: {e}")
-            pass 
-    
-    # Local Ingestion
-    else:
-        if os.path.exists(batch_dir):
-            if not os.path.exists(quarantine_dir):
-                os.makedirs(quarantine_dir)
+    # Process local or cloud batches
+    if os.path.exists(batch_dir) or raw_path.startswith("gs://"):
+        # Cloud Logic (GCS)
+        if env == "prod" or raw_path.startswith("gs://"):
+            fs = gcsfs.GCSFileSystem()
+            bucket_name = gcp_cfg["gcp"]["gcs"]["bucket_name"]
+            batch_pattern = f"gs://{bucket_name}/data/raw/new_batches/*.csv"
+            files = fs.glob(batch_pattern)
+        else:
+            # Local Logic
+            files = [os.path.join(batch_dir, f) for f in os.listdir(batch_dir) if f.endswith(".csv")]
 
-            for file in os.listdir(batch_dir):
-                if file.endswith(".csv"):
-                    batch_path = os.path.join(batch_dir, file)
-                    try:
-                        batch_df = pd.read_csv(batch_path, parse_dates=["Date"], dtype={"StateHoliday": str})
-                        validate_train(batch_df)
-                        new_batches_found.append(batch_df)
-                        logger.info(f"Batch '{file}' validated successfully.")
+        for f in files:
+            try:
+                # No parse_dates=["Date"] anymore
+                batch_df = pd.read_csv(f)
+                validate_train(batch_df)
+                new_batches_found.append(batch_df)
+                logger.info(f"Batch '{f}' validated.")
+            except Exception as e:
+                logger.warning(f"Batch '{f}' rejected: {e}")
+                if not raw_path.startswith("gs://"):
+                    if not os.path.exists(quarantine_dir): os.makedirs(quarantine_dir)
+                    shutil.move(f, os.path.join(quarantine_dir, os.path.basename(f)))
 
-                    except Exception as e:
-                        logger.warning(f"Batch '{file}' rejected: {e}")
-                        dest_path = os.path.join(quarantine_dir, file)
-                        shutil.move(batch_path, dest_path)
-                        logger.info(f"Moved corrupted file '{file}' to quarantine.")
-
-    # 5. Final Merge & Re-Validation
+    # 5. Final Merge
     if new_batches_found:
         final_train = pd.concat([train_base] + new_batches_found, ignore_index=True)
-        final_train = final_train.sort_values("Date", ascending=True)
-        validate_train(final_train)
-        logger.info(f"Integrated {len(new_batches_found)} new batches into training set.")
+        logger.info(f"Integrated {len(new_batches_found)} new batches.")
+    else:
+        final_train = train_base
 
-    # Ensure output directory exists
+    # 6. Export to Parquet
     if not validated_path.startswith("gs://"):
         os.makedirs(validated_path, exist_ok=True)
 
-    # 6. Export to Parquet
     final_train.to_parquet(f"{validated_path}/train.parquet", index=False)
-    store.to_parquet(f"{validated_path}/store.parquet", index=False)
-    
     logger.info(f"Ingestion complete. Total rows: {len(final_train)} | Output: {validated_path}")
 
 if __name__ == "__main__":
