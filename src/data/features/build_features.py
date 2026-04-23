@@ -39,6 +39,10 @@ def _apply_step(
     # Clean column names is always a good final or initial step
     if step_name == "clean_names":
         return core.clean_column_names(df)
+    
+    if step_name == "cast_ohe_to_bool":
+        cols = feature_cfg.get("categorical_columns", [])
+        return core.cast_ohe_to_bool(df, categorical_columns=cols)
 
     raise ValueError(f"Unknown feature step configured: {step_name}")
 

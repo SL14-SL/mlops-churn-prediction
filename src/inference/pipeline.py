@@ -1,50 +1,26 @@
 import pandas as pd
+from src.utils.logger import get_logger
+from src.configs.loader import load_config
+from src.data.features.build_features import build_features
 
-from src.data.validation.validate import validate_inference
-from src.inference.forecasting_policy import (
-    normalize_store_key,
-    apply_forecasting_business_rules,
-)
-from src.inference.forecasting_provider import build_forecasting_inference_features
-from src.inference.contracts import InferenceBuildRequest
+logger = get_logger(__name__)
 
+TRAIN_CFG = load_config("training.yaml")
 
 def validate_prediction_input(input_df: pd.DataFrame) -> pd.DataFrame:
-    """Validate and normalize raw prediction input."""
-    validated_df = validate_inference(input_df)
-
-    # Übergangsweise noch forecasting-orientiert:
-    # normalize_store_key only if present
-    if "Store" in validated_df.columns:
-        validated_df = normalize_store_key(validated_df)
-
+    """
+    Validate and normalize raw prediction input.
+    Ensures column names are consistent (lowercase, underscores).
+    """
+    # 1. Basic Cleaning (match training preprocessing)
+    validated_df = input_df.copy()
+    validated_df.columns = [
+        str(col).lower().replace(" ", "_") 
+        for col in validated_df.columns
+    ]
+    # validated_df = build_features(validated_df, config=TRAIN_CFG)
+    
     return validated_df
-
-
-def build_inference_features(
-    validated_df: pd.DataFrame,
-    *,
-    config: dict,
-    artifacts,
-    context=None,
-) -> pd.DataFrame:
-    """
-    Build final inference feature frame using a provider-specific implementation.
-    """
-    project_cfg = config.get("project", {})
-    problem_type = project_cfg.get("problem_type", "forecasting")
-
-    request = InferenceBuildRequest(
-        validated_df=validated_df,
-        config=config,
-        artifacts=artifacts,
-        context=context,
-    )
-
-    if problem_type == "forecasting":
-        return build_forecasting_inference_features(request)
-
-    raise ValueError(f"Unsupported problem_type for inference: {problem_type}")
 
 
 def align_features_for_model(
@@ -52,28 +28,52 @@ def align_features_for_model(
     model,
     model_type: str,
 ) -> pd.DataFrame:
-    """Align inference dataframe to expected model feature order."""
-    if model_type == "xgboost":
-        model_features = model.get_booster().feature_names
+    """
+    Aligns inference dataframe to the exact feature order expected by the model.
+    Fills missing One-Hot columns with 0.
+    """
+    try:
+        # 1. Get the list of features the model was trained on
+        if model_type == "xgboost":
+            # For XGBoost (Booster/Pyfunc)
+            try:
+                # Try getting it from the booster directly
+                raw_features = model.get_booster().feature_names
+            except AttributeError:
+                # If it's wrapped in an MLflow Pyfunc object
+                raw_features = model.metadata.get_input_schema().input_names()
+        else:
+            # Fallback for other model types via MLflow Signature
+            raw_features = model.metadata.get_input_schema().input_names()
+
+        model_features = [f.lower() for f in raw_features]
+
+        # 2. Critical Step: Fill missing columns with 0
+        # If the model wants 'gender_male' but we only sent a Female record,
+        # we create 'gender_male' and set it to 0.
+        missing_cols = set(model_features) - set(processed_df.columns)
+        for col in missing_cols:
+            processed_df[col] = 0
+
+        # 3. Align order and return
         return processed_df[model_features]
 
-    return processed_df
-
-
-def apply_business_rules(prediction: float, is_open: int) -> float:
-    """Apply project-specific post-processing rules."""
-    return apply_forecasting_business_rules(prediction, is_open)
+    except Exception as e:
+        logger.error(f"Feature alignment failed: {e}")
+        # Show which columns were expected vs which were there for better debugging
+        if 'model_features' in locals():
+             logger.debug(f"Expected: {model_features}")
+             logger.debug(f"Available: {list(processed_df.columns)}")
+        raise
 
 
 def apply_prediction_postprocessing(
     predictions: list[float],
-    open_flags: list[int] | None,
 ) -> list[float]:
-    """Apply optional domain-specific post-processing."""
-    if open_flags is None:
-        return predictions
-
-    return [
-        float(apply_business_rules(pred, is_open))
-        for pred, is_open in zip(predictions, open_flags)
-    ]
+    """
+    Apply optional domain-specific post-processing for classification.
+    Currently, we just ensure the output format is consistent.
+    """
+    # might want to clip values or apply a threshold
+    # But for now,keep the raw model output (0/1 or probability)
+    return [float(pred) for pred in predictions]

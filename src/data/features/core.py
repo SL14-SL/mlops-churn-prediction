@@ -46,3 +46,35 @@ def clean_column_names(df: pd.DataFrame) -> pd.DataFrame:
         for col in df.columns
     ]
     return df
+
+def cast_ohe_to_bool(df: pd.DataFrame, categorical_columns: list) -> pd.DataFrame:
+    """
+    Identifies all columns generated via OHE from the categorical_columns 
+    defined in training.yaml and casts them to bool.
+    """
+    # Get the list of categorical source columns from the config
+    # This comes from your training.yaml -> features -> categorical_columns
+    # df = df.copy()
+    # for col in df.columns:
+    #     # Prüfe auf Integers/Floats, die nur 0 und 1 enthalten
+    #     unique_vals = set(df[col].dropna().unique())
+    #     if unique_vals.issubset({0, 1, 0.0, 1.0}):
+    #         # Wir weisen die Konvertierung explizit neu zu
+    #         df[col] = df[col].map({1: True, 0: False, 1.0: True, 0.0: False}).astype(bool)
+    # return df
+
+    if not categorical_columns:
+        return df
+
+    # Find all columns that start with one of the categorical column names
+    # e.g., if 'gender' is in cat_cols, find 'gender_male', 'gender_female'
+    ohe_features = [
+        col for col in df.columns 
+        if any(col.startswith(f"{base_col}_") for base_col in categorical_columns)
+    ]
+
+    for col in ohe_features:
+        # Cast to bool to satisfy MLflow schema
+        df[col] = df[col].astype(bool)
+        
+    return df

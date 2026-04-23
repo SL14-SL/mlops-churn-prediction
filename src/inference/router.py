@@ -51,18 +51,11 @@ def load_registry_model(model_name: str):
         or "xgboost"
     )
 
-    target_transformation = (
-        run.data.tags.get("target_transformation")
-        or run.data.params.get("target_transformation")
-        or "none"
-    )
-
     model = load_model_by_type(model_uri, model_type)
 
     logger.info(
         f"Loaded registry model: alias={alias} | "
         f"model_uri={model_uri} | model_type={model_type} | "
-        f"target_transformation={target_transformation}"
     )
 
-    return model, model_type, target_transformation, alias, model_uri
+    return model, model_type, alias, model_uri
