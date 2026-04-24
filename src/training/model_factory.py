@@ -4,6 +4,8 @@ import xgboost as xgb
 from copy import deepcopy
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
+import mlflow.pyfunc
+from src.training.pyfunc_wrapper import ChurnModelWrapper
 
 MODEL_REGISTRY = {
     "xgboost": xgb.XGBClassifier,
@@ -73,8 +75,11 @@ def log_model_by_type(
     if signature is not None:
         kwargs["signature"] = signature
 
-    MODEL_LOGGERS[model_type](
-        model,
-        "model", 
+    # Wrap model so that predict() returns probabilities
+    wrapped_model = ChurnModelWrapper(model)
+
+    mlflow.pyfunc.log_model(
+        artifact_path="model",
+        python_model=wrapped_model,
         **kwargs,
     )

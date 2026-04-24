@@ -1,11 +1,17 @@
 import pandas as pd
+import numpy as np
+
 from src.utils.logger import get_logger
+from src.inference.decision import DecisionConfig, DecisionEngine
 from src.configs.loader import load_config
-from src.data.features.build_features import build_features
 
 logger = get_logger(__name__)
 
-TRAIN_CFG = load_config("training.yaml")
+CFG = load_config()
+
+decision_engine = DecisionEngine(
+    DecisionConfig.from_config(CFG)
+)
 
 def validate_prediction_input(input_df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -18,7 +24,6 @@ def validate_prediction_input(input_df: pd.DataFrame) -> pd.DataFrame:
         str(col).lower().replace(" ", "_") 
         for col in validated_df.columns
     ]
-    # validated_df = build_features(validated_df, config=TRAIN_CFG)
     
     return validated_df
 
@@ -65,6 +70,40 @@ def align_features_for_model(
              logger.debug(f"Expected: {model_features}")
              logger.debug(f"Available: {list(processed_df.columns)}")
         raise
+
+def predict_and_decide(
+    input_df: pd.DataFrame,
+    model,
+    model_type: str,
+) -> list[dict]:
+
+    # 1. validate
+    validated_df = validate_prediction_input(input_df)
+
+    # 2. align
+    aligned_df = align_features_for_model(
+        processed_df=validated_df,
+        model=model,
+        model_type=model_type,
+    )
+
+    # 3. predict
+    try:
+        if model_type == "xgboost":
+            probs = model.predict(aligned_df)
+        else:
+            probs = model.predict_proba(aligned_df)[:, 1]
+    except Exception as e:
+        logger.error(f"Prediction failed: {e}")
+        raise
+
+    probs = np.array(probs).flatten()
+    probs = apply_prediction_postprocessing(probs)
+
+    # 4. decision
+    results = [decision_engine.decide(p) for p in probs]
+
+    return results
 
 
 def apply_prediction_postprocessing(

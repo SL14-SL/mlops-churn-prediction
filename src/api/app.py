@@ -4,6 +4,7 @@ import socket
 import traceback
 import time
 import pandas as pd
+import numpy as np
 from contextlib import asynccontextmanager
 from pathlib import Path
 from uuid import uuid4
@@ -19,6 +20,7 @@ from starlette.status import HTTP_403_FORBIDDEN
 
 from src.api.schema import PredictionRequest, PredictionResponse
 from src.configs.loader import load_config, get_path
+from src.inference.decision import DecisionEngine, DecisionConfig
 
 from src.monitoring.prediction_logger import log_prediction
 from src.monitoring.data_quality import (
@@ -248,18 +250,29 @@ def predict(payload: PredictionRequest):
 
         # 6. Model Inference (Batch prediction)
         t = time.perf_counter()
-        # pyfunc model.predict returns the class or probability depending on model configuration
+
         raw_preds = model.predict(final_df)
-        predictions = [float(p) for p in raw_preds]
+        raw_preds = np.array(raw_preds).flatten()
+
+        if set(np.unique(raw_preds)).issubset({0, 1}):
+            logger.warning("Model returned class labels instead of probabilities")
+
+        probs = [float(p) for p in raw_preds]
+
+        # Decision Layer
+        decision_engine = DecisionEngine(DecisionConfig.from_config(CFG))
+
+        results = [decision_engine.decide(p) for p in probs]
+
         timings["inference"] = _ms_since(t)
 
         # 7. Async Logging & Response Construction
         timings["total"] = _ms_since(request_started)
-        
-        for features, pred in zip(payload.inputs, predictions):
+
+        for features, result in zip(payload.inputs, results):
             log_prediction(
                 features,
-                pred,
+                result["churn_probability"],
                 model_alias=serving_alias,
                 model_version=serving_model_version,
                 model_run_id=serving_model_run_id,
@@ -268,10 +281,10 @@ def predict(payload: PredictionRequest):
             )
 
         return {
-            "predictions": predictions,
+            "predictions": results,
             "status": "success",
             "metadata": {
-                "rows": len(predictions),
+                "rows": len(results),
                 "model_name": MODEL_NAME,
                 "serving_alias": serving_alias,
                 "request_id": request_id,

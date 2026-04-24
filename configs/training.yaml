@@ -10,7 +10,6 @@ model:
     max_depth: 3
     learning_rate: 0.05
 
-
 data:
   target_column: Churn
   known_targets: 
