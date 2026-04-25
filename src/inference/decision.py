@@ -21,6 +21,13 @@ class DecisionConfig:
             customer_value=float(decision_cfg.get("customer_value", 100)),
         )
 
+    def apply_model_threshold(self, threshold: float | None):
+        """
+        Override threshold with model-specific value (if available)
+        """
+        if threshold is not None:
+            self.high_risk_threshold = float(threshold)
+
     def __post_init__(self):
         if not (0 <= self.medium_risk_threshold <= self.high_risk_threshold <= 1):
             raise ValueError("Invalid threshold configuration")

@@ -36,6 +36,7 @@ from src.data.features.build_features import build_features
 from src.inference.pipeline import (
     validate_prediction_input, 
     align_features_for_model,
+    predict_and_decide,
 )
 from src.inference.adapters import request_to_dataframe
 from src.inference.router import load_registry_model
@@ -251,18 +252,10 @@ def predict(payload: PredictionRequest):
         # 6. Model Inference (Batch prediction)
         t = time.perf_counter()
 
-        raw_preds = model.predict(final_df)
-        raw_preds = np.array(raw_preds).flatten()
-
-        if set(np.unique(raw_preds)).issubset({0, 1}):
-            logger.warning("Model returned class labels instead of probabilities")
-
-        probs = [float(p) for p in raw_preds]
-
-        # Decision Layer
-        decision_engine = DecisionEngine(DecisionConfig.from_config(CFG))
-
-        results = [decision_engine.decide(p) for p in probs]
+        results = predict_and_decide(
+            input_df=final_df,
+            model=model,
+        )
 
         timings["inference"] = _ms_since(t)
 

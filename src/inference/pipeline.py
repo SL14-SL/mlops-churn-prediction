@@ -71,40 +71,46 @@ def align_features_for_model(
              logger.debug(f"Available: {list(processed_df.columns)}")
         raise
 
-def predict_and_decide(
-    input_df: pd.DataFrame,
-    model,
-    model_type: str,
-) -> list[dict]:
 
-    # 1. validate
-    validated_df = validate_prediction_input(input_df)
+def _build_decision_engine(model):
+    """
+    Build decision engine using:
+    1. Base config (dev/prod.yaml)
+    2. Override with model-specific threshold (if available)
+    """
+    decision_config = DecisionConfig.from_config(CFG)
 
-    # 2. align
-    aligned_df = align_features_for_model(
-        processed_df=validated_df,
-        model=model,
-        model_type=model_type,
-    )
-
-    # 3. predict
+    # 🔥 Extract threshold from MLflow model metadata
+    threshold = None
     try:
-        if model_type == "xgboost":
-            probs = model.predict(aligned_df)
-        else:
-            probs = model.predict_proba(aligned_df)[:, 1]
+        if hasattr(model, "metadata") and model.metadata is not None:
+            meta = getattr(model.metadata, "metadata", {})
+            threshold = meta.get("optimal_threshold")
+
+            if threshold is not None:
+                logger.info(f"Using model-specific threshold: {threshold}")
+
     except Exception as e:
-        logger.error(f"Prediction failed: {e}")
-        raise
+        logger.warning(f"Could not extract threshold from model metadata: {e}")
 
-    probs = np.array(probs).flatten()
-    probs = apply_prediction_postprocessing(probs)
+    # Apply override
+    decision_config.apply_model_threshold(threshold)
 
-    # 4. decision
+    return DecisionEngine(decision_config)
+
+
+def predict_and_decide(input_df: pd.DataFrame, model) -> list[dict]:
+
+    decision_engine = _build_decision_engine(model)
+
+    # 1. Predict probabilities
+    raw_preds = model.predict(input_df)
+    probs = np.array(raw_preds).flatten().astype(float)
+
+    # 2. Decision
     results = [decision_engine.decide(p) for p in probs]
 
     return results
-
 
 def apply_prediction_postprocessing(
     predictions: list[float],

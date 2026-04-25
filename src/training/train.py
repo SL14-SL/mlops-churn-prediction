@@ -20,6 +20,9 @@ from src.constants import PROJECT_ROOT
 from src.training.model_factory import build_model, fit_model, log_model_by_type
 from src.utils.logger import get_logger
 
+from sklearn.metrics import precision_recall_curve
+
+
 logger = get_logger(__name__)
 
 ENV_CFG = load_config()
@@ -58,6 +61,15 @@ def get_or_create_experiment(project_name: str):
     if not mlflow.get_experiment_by_name(project_name):
         mlflow.create_experiment(project_name)
     mlflow.set_experiment(project_name)
+
+def find_optimal_threshold(y_true, y_probs):
+    precision, recall, thresholds = precision_recall_curve(y_true, y_probs)
+
+    # Beispiel: F1 maximieren
+    f1_scores = 2 * (precision * recall) / (precision + recall + 1e-8)
+    best_idx = f1_scores.argmax()
+
+    return thresholds[best_idx]
 
 def train(train_file: str | None = None, val_file: str | None = None):
     """Main training task for Churn Classification."""
@@ -119,6 +131,10 @@ def train(train_file: str | None = None, val_file: str | None = None):
         
         if hasattr(model, "predict_proba"):
             metrics["roc_auc"] = roc_auc_score(y_val, model.predict_proba(X_val)[:, 1])
+            y_probs = model.predict_proba(X_val)[:,1]
+            optimal_threshold = find_optimal_threshold(y_val, y_probs)
+            mlflow.log_param("optimal_threshold", float(optimal_threshold))
+
 
         # Logging
         mlflow.log_params(model_cfg.get("params", {}))
@@ -130,7 +146,10 @@ def train(train_file: str | None = None, val_file: str | None = None):
             model=model,
             model_type=model_type,
             input_example=X_val.iloc[:3],
-            metadata={"target": target_column}
+            metadata={
+                "target": target_column,
+                "optimal_thrshold": float(optimal_threshold),
+                }
         )
 
         logger.info(f"Train complete. Metrics: {metrics}")
