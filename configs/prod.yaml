@@ -39,8 +39,8 @@ costs:
     drift_triggered_runs_per_month: 8
 
 decision:
-  high_risk_threshold: 0.7
-  medium_risk_threshold: 0.4
+  customer_value: 100
   cost_discount: 10
   cost_contact: 2
-  costumer_value: 100
+  discount_uplift: 0.3
+  contact_uplift: 0.1

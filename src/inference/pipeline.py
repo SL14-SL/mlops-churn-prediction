@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import mlflow
 
 from src.utils.logger import get_logger
 from src.inference.decision import DecisionConfig, DecisionEngine
@@ -9,9 +10,6 @@ logger = get_logger(__name__)
 
 CFG = load_config()
 
-decision_engine = DecisionEngine(
-    DecisionConfig.from_config(CFG)
-)
 
 def validate_prediction_input(input_df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -72,7 +70,7 @@ def align_features_for_model(
         raise
 
 
-def _build_decision_engine(model):
+def _build_decision_engine():
     """
     Build decision engine using:
     1. Base config (dev/prod.yaml)
@@ -80,28 +78,12 @@ def _build_decision_engine(model):
     """
     decision_config = DecisionConfig.from_config(CFG)
 
-    # 🔥 Extract threshold from MLflow model metadata
-    threshold = None
-    try:
-        if hasattr(model, "metadata") and model.metadata is not None:
-            meta = getattr(model.metadata, "metadata", {})
-            threshold = meta.get("optimal_threshold")
-
-            if threshold is not None:
-                logger.info(f"Using model-specific threshold: {threshold}")
-
-    except Exception as e:
-        logger.warning(f"Could not extract threshold from model metadata: {e}")
-
-    # Apply override
-    decision_config.apply_model_threshold(threshold)
-
     return DecisionEngine(decision_config)
 
 
 def predict_and_decide(input_df: pd.DataFrame, model) -> list[dict]:
 
-    decision_engine = _build_decision_engine(model)
+    decision_engine = _build_decision_engine()
 
     # 1. Predict probabilities
     raw_preds = model.predict(input_df)

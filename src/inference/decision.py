@@ -3,71 +3,67 @@ from dataclasses import dataclass
 
 @dataclass
 class DecisionConfig:
-    high_risk_threshold: float
-    medium_risk_threshold: float
+    # Business values
+    customer_value: float
     cost_discount: float
     cost_contact: float
-    customer_value: float
+
+    # Effectiveness
+    discount_uplift: float  # probability of saving a churner
+    contact_uplift: float
 
     @classmethod
     def from_config(cls, cfg: dict):
         decision_cfg = cfg.get("decision", {})
 
         return cls(
-            high_risk_threshold=float(decision_cfg.get("high_risk_threshold", 0.7)),
-            medium_risk_threshold=float(decision_cfg.get("medium_risk_threshold", 0.4)),
+            customer_value=float(decision_cfg.get("customer_value", 100)),
             cost_discount=float(decision_cfg.get("cost_discount", 10)),
             cost_contact=float(decision_cfg.get("cost_contact", 2.0)),
-            customer_value=float(decision_cfg.get("customer_value", 100)),
+            discount_uplift=float(decision_cfg.get("discount_uplift", 0.3)),
+            contact_uplift=float(decision_cfg.get("contact_uplift", 0.1)),
         )
-
-    def apply_model_threshold(self, threshold: float | None):
-        """
-        Override threshold with model-specific value (if available)
-        """
-        if threshold is not None:
-            self.high_risk_threshold = float(threshold)
-
-    def __post_init__(self):
-        if not (0 <= self.medium_risk_threshold <= self.high_risk_threshold <= 1):
-            raise ValueError("Invalid threshold configuration")
 
 
 class DecisionEngine:
     def __init__(self, config: DecisionConfig):
         self.config = config
 
-    def decide(self, churn_probability: float) -> dict:
-        segment = self._segment(churn_probability)
-        action = self._action(segment)
-        expected_value = self._expected_value(churn_probability, action)
+    def decide(self, p: float) -> dict:
+        """
+        Choose best action based on expected value.
+        """
 
-        return {
-            "churn_probability": float(churn_probability),
-            "segment": segment,
-            "action": action,
-            "expected_value": float(expected_value),
+        actions = {
+            "offer_discount": self._value_discount(p),
+            "send_email": self._value_contact(p),
+            "no_action": self._value_no_action(p),
         }
 
-    def _segment(self, p: float) -> str:
-        if p >= self.config.high_risk_threshold:
-            return "high_risk"
-        elif p >= self.config.medium_risk_threshold:
-            return "medium_risk"
-        return "low_risk"
+        # 🔥 Pick best action
+        best_action = max(actions, key=actions.get)
+        best_value = actions[best_action]
 
-    def _action(self, segment: str) -> str:
-        if segment == "high_risk":
-            return "offer_discount"
-        elif segment == "medium_risk":
-            return "send_email"
-        return "no_action"
+        return {
+            "churn_probability": float(p),
+            "action": best_action,
+            "expected_value": float(best_value),
+            "all_actions": actions,  # optional debug 👀
+        }
 
-    def _expected_value(self, p: float, action: str) -> float:
-        if action == "offer_discount":
-            return (p * self.config.customer_value) - self.config.cost_discount
+    # ---- VALUE FUNCTIONS ----
 
-        if action == "send_email":
-            return (p * self.config.customer_value * 0.5) - self.config.cost_contact
+    def _value_discount(self, p: float) -> float:
+        return (
+            p * (self.config.discount_uplift * self.config.customer_value)
+            - self.config.cost_discount
+        )
 
+    def _value_contact(self, p: float) -> float:
+        return (
+            p * (self.config.contact_uplift * self.config.customer_value)
+            - self.config.cost_contact
+        )
+
+    def _value_no_action(self, p: float) -> float:
         return 0.0

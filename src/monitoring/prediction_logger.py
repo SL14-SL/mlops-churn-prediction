@@ -30,6 +30,8 @@ def log_prediction(
     model_run_id: str | None = None,
     request_id: str | None = None,
     environment: str | None = None,
+    action: str | None = None, 
+    expected_value: float | None = None, 
 ) -> None:
     """
     Log prediction data to:
@@ -70,6 +72,8 @@ def log_prediction(
         log_entry = {
             "input": input_data,
             "prediction": prediction,
+            "action": action,
+            "expected_value": expected_value,
             "service": "prediction_api",
             **metadata,
         }

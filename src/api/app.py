@@ -271,6 +271,8 @@ def predict(payload: PredictionRequest):
                 model_run_id=serving_model_run_id,
                 request_id=request_id,
                 environment=environment,
+                action=result["action"],
+                expected_value=result["expected_value"],
             )
 
         return {
