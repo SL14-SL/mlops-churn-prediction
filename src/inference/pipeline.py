@@ -87,10 +87,25 @@ def predict_and_decide(input_df: pd.DataFrame, model) -> list[dict]:
 
     # 1. Predict probabilities
     raw_preds = model.predict(input_df)
-    probs = np.array(raw_preds).flatten().astype(float)
+
+    # Handle pyfunc output
+    if isinstance(raw_preds, list) and isinstance(raw_preds[0], dict):
+        probs = raw_preds[0]["probabilities"]
+    else:
+        probs = raw_preds
+
+    probs = np.asarray(probs).reshape(-1)   # <-- statt nur flatten
+    probs = probs.astype(float)
 
     # 2. Decision
-    results = [decision_engine.decide(p) for p in probs]
+    # results = [decision_engine.decide(p) for p in probs]
+    results = [decision_engine.decide_batch(probs)]
+    if isinstance(results, list) and len(results) == 1 and isinstance(results[0], list):
+        results = results[0]
+        
+    logger.info(f"DEBUG decide_batch output: {results}")
+    logger.info(f"DEBUG probs shape: {np.array(raw_preds).shape}")
+
 
     return results
 

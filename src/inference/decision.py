@@ -1,5 +1,7 @@
 from dataclasses import dataclass
+from src.utils.logger import get_logger
 
+logger = get_logger(__name__)
 
 @dataclass
 class DecisionConfig:
@@ -11,6 +13,9 @@ class DecisionConfig:
     # Effectiveness
     discount_uplift: float  # probability of saving a churner
     contact_uplift: float
+    max_discount_budget: float
+    max_discount_rate: float = 0.2
+    
 
     @classmethod
     def from_config(cls, cfg: dict):
@@ -22,6 +27,8 @@ class DecisionConfig:
             cost_contact=float(decision_cfg.get("cost_contact", 2.0)),
             discount_uplift=float(decision_cfg.get("discount_uplift", 0.3)),
             contact_uplift=float(decision_cfg.get("contact_uplift", 0.1)),
+            max_discount_rate=float(decision_cfg.get("max_discount_rate",0.2)),
+            max_discount_budget= float(decision_cfg.get("max_discount_budget", 10))
         )
 
 
@@ -67,3 +74,83 @@ class DecisionEngine:
 
     def _value_no_action(self, p: float) -> float:
         return 0.0
+    
+    def decide_batch(self, probs: list[float]) -> list[dict]:
+        """
+        Budget-aware decision using incremental value (uplift).
+        """
+
+        candidates = []
+
+        # 1. Compute values per customer
+        for i, p in enumerate(probs):
+            v_discount = self._value_discount(p)
+            v_email = self._value_contact(p)
+            v_none = self._value_no_action(p)
+
+            fallback_value = max(v_email, v_none)
+            fallback_action = "send_email" if v_email >= v_none else "no_action"
+
+            uplift = v_discount - fallback_value
+
+            candidates.append({
+                "idx": i,
+                "p": float(p),
+                "v_discount": v_discount,
+                "fallback_action": fallback_action,
+                "fallback_value": fallback_value,
+                "uplift": uplift,
+            })
+
+        # 2. Sort by uplift (NOT probability!)
+        candidates_sorted = sorted(
+            candidates,
+            key=lambda x: x["uplift"],
+            reverse=True
+        )
+
+        # 3. Budget constraint 
+        if self.config.max_discount_budget:
+            budget = self.config.max_discount_budget
+            cost_per_discount = self.config.cost_discount
+
+            used_budget = 0
+            selected = set()
+
+            for c in candidates_sorted:
+                if c["uplift"] <= 0:
+                    continue
+
+                if used_budget + cost_per_discount > budget:
+                    break
+
+                selected.add(c["idx"])
+                used_budget += cost_per_discount
+
+        elif self.config.max_discount_rate:
+            max_discount = int(len(probs) * self.config.max_discount_rate)
+            selected = {
+                c["idx"] for c in candidates_sorted[:max_discount]
+                if c["uplift"] > 0
+            }
+
+        # 4. Final decisions
+        results = []
+
+        for c in candidates:
+            if c["idx"] in selected:
+                action = "offer_discount"
+                value = c["v_discount"]
+            else:
+                action = c["fallback_action"]
+                value = c["fallback_value"]
+
+            results.append({
+                "churn_probability": c["p"],
+                "action": action,
+                "expected_value": float(value),
+            })
+
+        logger.info(f"Selected {len(selected)} discounts | budget_used={used_budget:.2f}")
+
+        return results
