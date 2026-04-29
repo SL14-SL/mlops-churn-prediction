@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import pandas as pd
 from scipy.stats import chisquare, ks_2samp
 
-from src.configs.loader import file_exists, get_path
+from src.configs.loader import file_exists, get_path, load_config
 from src.monitoring.config import get_feature_drift_settings
 from src.utils.logger import get_logger
 
@@ -16,6 +16,18 @@ MONITORING_PATH = get_path("monitoring")
 PREDICTIONS_PATH = get_path("predictions")
 VALIDATED_PATH = get_path("validated_data")
 
+def get_feature_columns_from_training_config() -> tuple[list[str], list[str]]:
+    """
+    Load numeric and categorical feature columns from training.yaml.
+    Keeps feature drift monitoring aligned with the training pipeline.
+    """
+    training_cfg = load_config("training.yaml")
+    feature_cfg = training_cfg.get("features", {})
+
+    numeric_features = feature_cfg.get("numeric_columns", [])
+    categorical_features = feature_cfg.get("categorical_columns", [])
+
+    return numeric_features, categorical_features
 
 def _history_path() -> str:
     return f"{MONITORING_PATH}/feature_drift_history.parquet"
@@ -204,14 +216,19 @@ def summarize_feature_drift(results_df: pd.DataFrame) -> dict:
 
 
 def run_feature_drift_check() -> pd.DataFrame:
+    """
+    Run feature drift detection for configured churn features.
+
+    Uses training.yaml as the single source of truth for feature definitions.
+    """
+
     cfg = get_feature_drift_settings()
 
     if not cfg.get("enabled", True):
         logger.info("Feature drift monitoring is disabled in monitoring.yaml.")
         return pd.DataFrame()
 
-    numeric_features = cfg.get("numeric_features", [])
-    categorical_features = cfg.get("categorical_features", [])
+    numeric_features, categorical_features = get_feature_columns_from_training_config() 
     min_samples = int(cfg.get("min_samples", 50))
     p_value_threshold = float(cfg.get("p_value_threshold", 0.01))
     stat_threshold = float(cfg.get("stat_threshold", 0.10))
@@ -259,6 +276,10 @@ def run_feature_drift_check() -> pd.DataFrame:
             p_value_threshold=p_value_threshold,
         )
         results.append(result)
+
+    if not results:
+        logger.warning("No feature drift results were generated.")
+        return pd.DataFrame()
 
     latest_df = append_feature_drift_history(results)
 
