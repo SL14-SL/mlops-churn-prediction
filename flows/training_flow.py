@@ -29,7 +29,6 @@ from prefect import flow, task, get_run_logger
 # ruff: noqa: E402
 from src.data.raw.ingest import ingest
 from src.data.features.build_features import run_feature_pipeline
-from src.data.features.create_state import create_feature_state
 from src.data.splits.split import split as split_logic
 from src.data.versioning import make_dataset_version, snapshot_current_datasets, log_dataset_manifest_to_mlflow
 
@@ -38,7 +37,6 @@ from src.training.register import register_model
 from src.training.evaluate import compare_models, evaluate_model
 from src.training.policy import should_refresh_api, should_skip_training, get_run_strategy
 
-from src.monitoring.drift import fetch_current_data, detect_ks_drift
 from src.monitoring.feature_drift import run_feature_drift_check
 
 from src.utils.logger import get_logger
@@ -57,39 +55,41 @@ tracking_uri = ENV_CFG["tracking"]["mlflow_tracking_uri"]
 mlflow.set_tracking_uri(tracking_uri)
 logger.info(f"Using MLflow tracking URI: {tracking_uri}")
 
-@task(name="Check Data Drift")
-def task_check_drift():
-    """Analyzes recent predictions against baseline training data."""
-    p_logger = get_run_logger()
-    curr_df = fetch_current_data() 
-    if curr_df.empty:
-        p_logger.info("No log data found for drift detection. Skipping check.")
-        return False
-    
-    feature_drift_df = run_feature_drift_check()
-    if not feature_drift_df.empty:
-        drifted_features = feature_drift_df.loc[
-            feature_drift_df["drift_detected"], "feature"
-        ].tolist()
+@task(name="Check Feature Drift")
+def task_check_drift() -> bool:
+    """
+    Run feature drift monitoring and return whether drift was detected.
 
-        p_logger.info(
-            "Feature drift check completed | "
-            f"drifted_features={drifted_features}"
-        )
-    else:
+    Uses churn feature drift results instead of forecasting-based Sales drift.
+    """
+    p_logger = get_run_logger()
+
+    feature_drift_df = run_feature_drift_check()
+
+    if feature_drift_df.empty:
         p_logger.info("Feature drift check returned no results.")
-        
-    ref_file = f"{get_path('validated_data')}/train.parquet"
-    if not file_exists(ref_file):
-        p_logger.warning(f"Reference file {ref_file} missing. Cannot check drift.")
+        print("Drift status: False")
         return False
-        
-    ref_df = pd.read_parquet(ref_file)
-    results = detect_ks_drift(ref_df["Sales"], curr_df["prediction"], column_name="Sales")
-    
-    p_logger.info(f"Drift Check Results: {results}")
-    print(f"Drift status: {results['drift']}")
-    return results["drift"]
+
+    if "drift_detected" not in feature_drift_df.columns:
+        p_logger.warning("Feature drift results do not contain drift_detected column.")
+        print("Drift status: False")
+        return False
+
+    drifted_features = feature_drift_df.loc[
+        feature_drift_df["drift_detected"], "feature"
+    ].tolist()
+
+    drift_detected = bool(feature_drift_df["drift_detected"].fillna(False).any())
+
+    p_logger.info(
+        "Feature drift check completed | "
+        f"drift_detected={drift_detected} | "
+        f"drifted_features={drifted_features}"
+    )
+
+    print(f"Drift status: {drift_detected}")
+    return drift_detected
 
 @task(name="Evaluate Current Champion")
 def task_evaluate_champion():
@@ -109,11 +109,7 @@ def task_prepare_data(is_drift_run: bool):
     p_logger.info(f"Starting data preparation (Emergency Mode: {is_drift_run})")
     ingest()
     run_feature_pipeline()
-    p_logger.info("Updating feature state snapshot for the API.")
-    try:
-        create_feature_state()
-    except Exception as e:
-        p_logger.error(f"Failed to update feature state: {e}")
+    p_logger.info("Skipping feature state snapshot (not required for this setup).")
     split_logic(is_drift_run=is_drift_run)
 
 @task(name="Snapshot Dataset Version")
