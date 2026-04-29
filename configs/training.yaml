@@ -50,6 +50,12 @@ features:
   cast_to_numeric:
     - TotalCharges
 
+  # Numeric features
+  numeric_columns:
+    - tenure
+    - MonthlyCharges
+    - TotalCharges
+
   # Categorical features for One-Hot-Encoding
   categorical_columns:
     - gender
