@@ -7,6 +7,8 @@ import gcsfs
 import mlflow
 import numpy as np
 import pandas as pd
+from pathlib import Path
+
 from sklearn.metrics import (
     accuracy_score, 
     precision_score, 
@@ -62,7 +64,23 @@ def get_or_create_experiment(project_name: str):
         mlflow.create_experiment(project_name)
     mlflow.set_experiment(project_name)
 
+def save_feature_schema(df: pd.DataFrame, path: str = "models/feature_schema.json") -> dict:
+    """
+    Save the final training feature schema used by the model.
 
+    This schema is used at inference time to align incoming features.
+    """
+    schema = {
+        "columns": list(df.columns),
+        "dtypes": {col: str(dtype) for col, dtype in df.dtypes.items()},
+    }
+
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(schema, f, indent=2)
+
+    return schema
 def train(train_file: str | None = None, val_file: str | None = None):
     """Main training task for Churn Classification."""
     data_path = get_path("splits")
@@ -83,6 +101,9 @@ def train(train_file: str | None = None, val_file: str | None = None):
     X_train = normalize_feature_dtypes(df_train.drop(columns=drop_cols, errors="ignore"))
     X_val = normalize_feature_dtypes(df_val.drop(columns=drop_cols, errors="ignore"))
 
+    feature_schema_path = os.path.join(get_path("models"), "feature_schema.json")
+    feature_schema = save_feature_schema(X_train, feature_schema_path)
+    
     # Target Mapping for Classification (Yes=1, No=0)
     def robust_map(series):
         # 1. Convert to strings & force lower case
@@ -125,6 +146,8 @@ def train(train_file: str | None = None, val_file: str | None = None):
         mlflow.log_param("model_type", model_type)
         mlflow.log_metrics(metrics)
         mlflow.log_metric("duration_seconds", duration)
+        mlflow.log_artifact(feature_schema_path, artifact_path="feature_schema")
+        mlflow.log_param("n_features", len(feature_schema["columns"]))
         mlflow.log_params({
             "customer_value": ENV_CFG.get("decision", {}).get("customer_value"),
             "cost_discount": ENV_CFG.get("decision", {}).get("cost_discount"),

@@ -30,45 +30,74 @@ def align_features_for_model(
     processed_df: pd.DataFrame,
     model,
     model_type: str,
+    feature_schema: dict | None = None,
 ) -> pd.DataFrame:
     """
-    Aligns inference dataframe to the exact feature order expected by the model.
-    Fills missing One-Hot columns with 0.
+    Align inference dataframe to the exact feature structure expected by the model.
+
+    Priority:
+    1. feature_schema (preferred, explicit)
+    2. fallback to model metadata (MLflow signature)
+
+    Handles:
+    - missing columns (filled with 0)
+    - column order
+    - dtype enforcement
     """
     try:
-        # 1. Get the list of features the model was trained on
-        if model_type == "xgboost":
-            # For XGBoost (Booster/Pyfunc)
-            try:
-                # Try getting it from the booster directly
-                raw_features = model.get_booster().feature_names
-            except AttributeError:
-                # If it's wrapped in an MLflow Pyfunc object
-                raw_features = model.metadata.get_input_schema().input_names()
+        df = processed_df.copy()
+
+        # --- 1. Resolve expected feature list ---
+        if feature_schema:
+            model_features = feature_schema["columns"]
+            expected_dtypes = feature_schema.get("dtypes", {})
         else:
-            # Fallback for other model types via MLflow Signature
-            raw_features = model.metadata.get_input_schema().input_names()
+            # Fallback to MLflow metadata
+            if model_type == "xgboost":
+                try:
+                    raw_features = model.get_booster().feature_names
+                except AttributeError:
+                    raw_features = model.metadata.get_input_schema().input_names()
+            else:
+                raw_features = model.metadata.get_input_schema().input_names()
 
-        model_features = [f.lower() for f in raw_features]
+            model_features = [f.lower() for f in raw_features]
+            expected_dtypes = {}
 
-        # 2. Critical Step: Fill missing columns with 0
-        # If the model wants 'gender_male' but we only sent a Female record,
-        # we create 'gender_male' and set it to 0.
-        missing_cols = set(model_features) - set(processed_df.columns)
+        # --- 2. Normalize column names ---
+        df.columns = [str(col).lower() for col in df.columns]
+
+        # --- 3. Add missing columns ---
+        missing_cols = set(model_features) - set(df.columns)
         for col in missing_cols:
-            processed_df[col] = 0
+            df[col] = 0
 
-        # 3. Align order and return
-        return processed_df[model_features]
+        if missing_cols:
+            logger.warning(f"Missing features filled with 0: {missing_cols}")
+
+        # --- 4. Remove unexpected columns ---
+        extra_cols = set(df.columns) - set(model_features)
+        if extra_cols:
+            logger.warning(f"Dropping unexpected columns: {extra_cols}")
+            df = df.drop(columns=list(extra_cols))
+
+        # --- 5. Enforce column order ---
+        df = df[model_features]
+
+        # --- 6. Enforce dtypes (if schema available) ---
+        for col, dtype in expected_dtypes.items():
+            if col in df:
+                try:
+                    df[col] = df[col].astype(dtype)
+                except Exception:
+                    logger.warning(f"Failed to cast column {col} to {dtype}")
+
+        return df
 
     except Exception as e:
         logger.error(f"Feature alignment failed: {e}")
-        # Show which columns were expected vs which were there for better debugging
-        if 'model_features' in locals():
-             logger.debug(f"Expected: {model_features}")
-             logger.debug(f"Available: {list(processed_df.columns)}")
+        logger.debug(f"Available columns: {list(processed_df.columns)}")
         raise
-
 
 def _build_decision_engine():
     """

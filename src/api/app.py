@@ -40,6 +40,7 @@ from src.inference.pipeline import (
 )
 from src.inference.adapters import request_to_dataframe
 from src.inference.router import load_registry_model
+from src.inference.schema import load_feature_schema
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -61,6 +62,7 @@ model_uri = None
 dq_reference_categories: dict[str, set[str]] = {}
 serving_model_version = None
 serving_model_run_id = None
+feature_schema = None
 
 # API Key Security Configuration
 API_KEY_NAME = "X-API-KEY"
@@ -99,7 +101,7 @@ def reload_serving_model() -> dict:
     Updates the in-memory model used by the API without restarting the service.
     """
     global model, model_type, serving_alias, model_uri
-    global serving_model_version, serving_model_run_id
+    global serving_model_version, serving_model_run_id, feature_schema
 
     mlflow.set_tracking_uri(resolve_tracking_uri())
 
@@ -109,6 +111,8 @@ def reload_serving_model() -> dict:
         serving_alias,
         model_uri,
     ) = load_registry_model(MODEL_NAME)
+
+    feature_schema = load_feature_schema()
 
     serving_model_version = None
     serving_model_run_id = None
@@ -277,21 +281,22 @@ def predict(payload: PredictionRequest):
         final_df = align_features_for_model(
             processed_df=processed_df, 
             model=model, 
-            model_type=model_type
+            model_type=model_type,
+            feature_schema=feature_schema,
         )
         timings["alignment"] = _ms_since(t)
-        cat_base_cols = TRAIN_CFG.get("features", {}).get("categorical_columns", [])
+        # cat_base_cols = TRAIN_CFG.get("features", {}).get("categorical_columns", [])
 
-        for col in final_df.columns:
-            # Eine Spalte ist eine OHE-Spalte, wenn sie mit einem Kategorienamen beginnt
-            is_ohe_col = any(col.startswith(f"{base}_") for base in cat_base_cols)
+        # for col in final_df.columns:
+        #     # Eine Spalte ist eine OHE-Spalte, wenn sie mit einem Kategorienamen beginnt
+        #     is_ohe_col = any(col.startswith(f"{base}_") for base in cat_base_cols)
             
-            if is_ohe_col:
-                # Nur diese Spalten werden zu bool
-                final_df[col] = final_df[col].astype(bool)
-            elif col in ["tenure", "monthlycharges", "totalcharges"]:
-                # Diese Spalten müssen explizit numerisch bleiben
-                final_df[col] = pd.to_numeric(final_df[col], errors="coerce")
+        #     if is_ohe_col:
+        #         # Nur diese Spalten werden zu bool
+        #         final_df[col] = final_df[col].astype(bool)
+        #     elif col in ["tenure", "monthlycharges", "totalcharges"]:
+        #         # Diese Spalten müssen explizit numerisch bleiben
+        #         final_df[col] = pd.to_numeric(final_df[col], errors="coerce")
 
         # 6. Model Inference (Batch prediction)
         t = time.perf_counter()
