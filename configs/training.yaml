@@ -24,6 +24,27 @@ data:
     train:
       path: Telco-Customer-Churn.csv
 
+  versioning_sources:
+    raw_churn:
+      path_key: raw_data
+      file: Telco-Customer-Churn.csv
+
+    validated_train:
+      path_key: validated_data
+      file: train.parquet
+
+    features:
+      path_key: features
+      file: features.parquet
+
+    split_train:
+      path_key: splits
+      file: train.parquet
+
+    split_val:
+      path_key: splits
+      file: val.parquet
+
 training:
   validation_strategy: holdout
   test_size: 0.2

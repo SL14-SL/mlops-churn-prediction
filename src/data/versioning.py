@@ -68,43 +68,46 @@ def get_active_config_name() -> str:
     environment = CFG.get("environment", "dev")
     return f"{environment}.yaml"
 
+def get_versioning_sources() -> dict[str, str]:
+    """
+    Load dataset snapshot source paths from training.yaml.
+    Keeps dataset versioning reusable across different ML projects.
+    """
+    sources_cfg = TRAIN_CFG.get("data", {}).get("versioning_sources", {})
 
-def build_snapshot_paths(version_id: str) -> dict[str, str]:
-    """Builds all versioned target paths for the current environment."""
-    base = get_path("versioning")
+    if not sources_cfg:
+        raise ValueError("No data.versioning_sources configured in training.yaml.")
 
     return {
+        name: _join(get_path(spec["path_key"]), spec["file"])
+        for name, spec in sources_cfg.items()
+    }
+
+def build_snapshot_paths(version_id: str, source_paths: dict[str, str]) -> dict[str, str]:
+    """
+    Build versioned snapshot paths for configured dataset artifacts.
+    """
+    base = get_path("versioning")
+
+    paths = {
         "base": _join(base, version_id),
-        "raw_store": _join(base, version_id, "raw", "store.csv"),
-        "raw_train": _join(base, version_id, "raw", "train.csv"),
-        "raw_test": _join(base, version_id, "raw", "test.csv"),
-        "validated_train": _join(base, version_id, "validated", "train.parquet"),
-        "validated_store": _join(base, version_id, "validated", "store.parquet"),
-        "features": _join(base, version_id, "features", "features.parquet"),
-        "split_train": _join(base, version_id, "splits", "train.parquet"),
-        "split_val": _join(base, version_id, "splits", "val.parquet"),
         "manifest": _join(base, version_id, "manifest.json"),
         "latest_manifest": _join(base, "latest_manifest.json"),
     }
 
+    for name, src in source_paths.items():
+        filename = os.path.basename(src)
+        paths[name] = _join(base, version_id, name, filename)
+
+    return paths
 
 def snapshot_current_datasets(version_id: str) -> dict:
     """
-    Copies the current canonical datasets into a versioned snapshot structure.
-    Works in both dev (local) and prod (GCS).
+    Copy configured dataset sources into a versioned snapshot structure.
+    Fully config-driven via training.yaml.
     """
-    paths = build_snapshot_paths(version_id)
-
-    source_paths = {
-        "raw_store": _join(get_path("raw_data"), "store.csv"),
-        "raw_train": _join(get_path("raw_data"), "train.csv"),
-        "raw_test": _join(get_path("raw_data"), "test.csv"),
-        "validated_train": _join(get_path("validated_data"), "train.parquet"),
-        "validated_store": _join(get_path("validated_data"), "store.parquet"),
-        "features": _join(get_path("features"), "features.parquet"),
-        "split_train": _join(get_path("splits"), "train.parquet"),
-        "split_val": _join(get_path("splits"), "val.parquet"),
-    }
+    source_paths = get_versioning_sources()
+    paths = build_snapshot_paths(version_id, source_paths)
 
     logger.info(f"📦 Creating dataset snapshot for version: {version_id}")
 
@@ -118,21 +121,17 @@ def snapshot_current_datasets(version_id: str) -> dict:
         "git_commit": get_git_commit(),
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "seed": CFG.get("random_seed"),
+
+        "target_column": TRAIN_CFG.get("data", {}).get("target_column"),
+        "id_columns": TRAIN_CFG.get("data", {}).get("id_columns", []),
+
         "effective_config": {
             "environment_config": CFG,
             "training_config": TRAIN_CFG,
         },
+
         "sources": source_paths,
-        "snapshots": {
-            "raw_store": paths["raw_store"],
-            "raw_train": paths["raw_train"],
-            "raw_test": paths["raw_test"],
-            "validated_train": paths["validated_train"],
-            "validated_store": paths["validated_store"],
-            "features": paths["features"],
-            "split_train": paths["split_train"],
-            "split_val": paths["split_val"],
-        },
+        "snapshots": {key: paths[key] for key in source_paths},
     }
 
     if not paths["manifest"].startswith("gs://"):
@@ -146,7 +145,6 @@ def snapshot_current_datasets(version_id: str) -> dict:
 
     logger.info(f"✅ Dataset manifest written to: {paths['manifest']}")
     return manifest
-
 
 def get_latest_dataset_manifest() -> dict:
     """Loads the latest dataset manifest."""
@@ -186,16 +184,19 @@ def log_dataset_manifest_to_mlflow(manifest: dict):
 
     logger.info(f"🧾 Logged dataset manifest to MLflow for version: {dataset_version}")
 
-def get_dataset_paths_from_manifest(manifest: dict) -> dict[str,str]: 
+def get_dataset_paths_from_manifest(manifest: dict) -> dict[str, str]:
     """
-    Extracts the versioned training paths from a dataset manifest
+    Extract versioned dataset paths from a dataset manifest.
+    Keeps downstream training and reproduction code independent of project-specific artifact names.
     """
     snapshots = manifest["snapshots"]
 
-    return {
+    result = {
         "train_file": snapshots["split_train"],
         "val_file": snapshots["split_val"],
-        "features_file": snapshots.get("features"),
-        "validated_train_file": snapshots.get("validated_train"),
-        "validated_store_file": snapshots.get("validated_store"),
     }
+
+    for key, value in snapshots.items():
+        result[f"{key}_file"] = value
+
+    return result
