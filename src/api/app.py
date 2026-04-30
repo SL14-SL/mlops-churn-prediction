@@ -92,6 +92,47 @@ def resolve_tracking_uri() -> str:
             tracking_uri = CFG.get("mlflow_tracking_uri", "http://localhost:5000")
     return tracking_uri
 
+def reload_serving_model() -> dict:
+    """
+    Reload the current champion model from the MLflow Model Registry.
+
+    Updates the in-memory model used by the API without restarting the service.
+    """
+    global model, model_type, serving_alias, model_uri
+    global serving_model_version, serving_model_run_id
+
+    mlflow.set_tracking_uri(resolve_tracking_uri())
+
+    (
+        model,
+        model_type,
+        serving_alias,
+        model_uri,
+    ) = load_registry_model(MODEL_NAME)
+
+    serving_model_version = None
+    serving_model_run_id = None
+
+    if serving_alias and serving_alias != "unknown":
+        client = MlflowClient()
+        version = client.get_model_version_by_alias(MODEL_NAME, serving_alias)
+        serving_model_version = str(version.version)
+        serving_model_run_id = version.run_id
+
+    logger.info(
+        f"Model reloaded: {MODEL_NAME} "
+        f"(alias={serving_alias}, version={serving_model_version})"
+    )
+
+    return {
+        "model_name": MODEL_NAME,
+        "serving_alias": serving_alias,
+        "model_version": serving_model_version,
+        "model_run_id": serving_model_run_id,
+        "model_uri": model_uri,
+    }
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -112,23 +153,8 @@ async def lifespan(app: FastAPI):
         )
 
         # --- Load Model from MLflow ---
-        mlflow.set_tracking_uri(resolve_tracking_uri())
-        logger.info(f"Loading champion model: {MODEL_NAME}")
-
         try:
-            (
-                model,
-                model_type,
-                serving_alias,
-                model_uri,
-            ) = load_registry_model(MODEL_NAME)
-
-            if serving_alias and serving_alias != "unknown":
-                client = MlflowClient()
-                version = client.get_model_version_by_alias(MODEL_NAME, serving_alias)
-                serving_model_version = str(version.version)
-                serving_model_run_id = version.run_id
-
+            reload_serving_model()
             logger.info(f"✅ Model loaded: {MODEL_NAME} (Version: {serving_model_version})")
         except Exception as model_err:
             logger.error(f"❌ Failed to load model from registry: {model_err}")
@@ -173,6 +199,24 @@ async def serving_monitoring_middleware(request: Request, call_next):
 @app.get("/metrics", include_in_schema=False)
 def metrics():
     return PlainTextResponse(generate_latest().decode("utf-8"), media_type=CONTENT_TYPE_LATEST)
+
+@app.post("/admin/reload-model")
+def reload_model(api_key: str = Depends(get_api_key)):
+    """
+    Reload the current champion model from MLflow.
+
+    Used after a new champion model version has been promoted.
+    """
+    try:
+        result = reload_serving_model()
+    except Exception as e:
+        logger.error(f"Model reload failed: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Model reload failed: {str(e)}")
+
+    return {
+        "status": "reloaded",
+        **result,
+    }
 
 @app.get("/health")
 def health(response: Response):
