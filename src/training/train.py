@@ -5,9 +5,7 @@ import time
 from datetime import datetime, timezone
 import gcsfs
 import mlflow
-import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 from pathlib import Path
 
 from sklearn.metrics import (
@@ -21,6 +19,7 @@ from sklearn.metrics import (
 from src.configs.loader import get_path, load_config
 from src.constants import PROJECT_ROOT
 from src.training.model_factory import build_model, fit_model, log_model_by_type
+from src.training.explainability import log_feature_importance, log_shap_summary
 from src.utils.logger import get_logger
 
 from sklearn.metrics import precision_recall_curve
@@ -83,47 +82,6 @@ def save_feature_schema(df: pd.DataFrame, path: str = "models/feature_schema.jso
 
     return schema
 
-def log_feature_importance(model, feature_names: list[str]) -> None:
-    """
-    Log feature importance table and plot to MLflow.
-
-    Helps explain which customer attributes drive churn predictions.
-    """
-    if not hasattr(model, "feature_importances_"):
-        logger.warning("Model does not expose feature_importances_. Skipping.")
-        return
-
-    importance_df = pd.DataFrame(
-        {
-            "feature": feature_names,
-            "importance": model.feature_importances_,
-        }
-    ).sort_values("importance", ascending=False)
-
-    output_dir = Path(get_path("models")) / "reports"
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    csv_path = output_dir / "feature_importance.csv"
-    plot_path = output_dir / "feature_importance_top20.png"
-
-    importance_df.to_csv(csv_path, index=False)
-
-    top_n = importance_df.head(20).sort_values("importance")
-
-    plt.figure(figsize=(10, 8))
-    plt.barh(top_n["feature"], top_n["importance"])
-    plt.title("Top 20 Feature Importances")
-    plt.xlabel("Importance")
-    plt.tight_layout()
-    plt.savefig(plot_path)
-    plt.close()
-
-    mlflow.log_artifact(str(csv_path), artifact_path="feature_importance")
-    mlflow.log_artifact(str(plot_path), artifact_path="feature_importance")
-
-    logger.info("Feature importance logged to MLflow.")
-
-
 def train(train_file: str | None = None, val_file: str | None = None):
     """Main training task for Churn Classification."""
     data_path = get_path("splits")
@@ -174,8 +132,15 @@ def train(train_file: str | None = None, val_file: str | None = None):
         
         duration = time.perf_counter() - start_perf
         cost_summary = build_training_cost_summary(start_time, datetime.now(timezone.utc), duration)
+
         log_feature_importance(model, list(X_train.columns))
-        
+
+        try:
+            sample = X_train.sample(min(500, len(X_train)), random_state=42)
+            log_shap_summary(model, sample)
+        except Exception as e:
+            logger.warning(f"SHAP logging skipped: {e}")
+
         # Metrics Calculation
         preds = model.predict(X_val)
         acc = accuracy_score(y_val, preds)
