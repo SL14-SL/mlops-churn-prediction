@@ -42,7 +42,7 @@ services:
       - "4200:4200"
     environment:
       PREFECT_SERVER_API_HOST: 0.0.0.0
-      PREFECT_API_URL: http://127.0.0.1:4200/api
+      PREFECT_API_URL: http://prefect:4200/api
       PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://postgres:postgres@db:5432/prefectdb
     volumes:
       - ./prefect_data:/root/.prefect
@@ -61,6 +61,10 @@ services:
     environment:
       PYTHONPATH: /app
       MLFLOW_TRACKING_URI: http://mlflow:5000
+      PREFECT_API_URL: http://prefect:4200/api
+      PREFECT_HOME: /tmp/prefect
+      PREFECT_PROFILE: ephemeral
+      MPLCONFIGDIR: /tmp/matplotlib
       UV_CACHE_DIR: /tmp/.uv_cache
       PYTHONPYCACHEPREFIX: /tmp/pycache
       UV_NO_SYNC: "1"
@@ -82,7 +86,7 @@ services:
 
   prometheus:
     image: prom/prometheus:latest
-    container_name: forecasting-prometheus
+    container_name: churn-prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
     volumes:
@@ -96,7 +100,7 @@ services:
 
   grafana:
     image: grafana/grafana:latest
-    container_name: forecasting-grafana
+    container_name: churn-grafana
     ports:
       - "3000:3000"
     depends_on:

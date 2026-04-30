@@ -14,7 +14,7 @@ data_quality:
 performance:
   enabled: true
 
-  target_column: Churn
+  target_column: churn
   probability_column: churn_probability
   prediction_column: churn_prediction
   action_column: action
@@ -44,10 +44,10 @@ delayed_labels:
   enabled: true
 
   prediction_id_column: prediction_id
-  entity_id_column: customerID
+  entity_id_column: customerid
   prediction_time_column: prediction_time
   label_available_time_column: label_available_at
-  target_column: Churn
+  target_column: churn
 
   min_label_delay_days: 30
   max_label_delay_days: 60

@@ -40,21 +40,21 @@ features:
   features:
   # Define which steps from src/data/features/core.py should run
   enabled_steps:
+    - clean_names
     - cast_numeric_types
     - encode_categoricals
     - drop_configured
-    - clean_names
     - cast_ohe_to_bool
     
   # These columns need to be cast from String to Float (Notebook logic)
   cast_to_numeric:
-    - TotalCharges
+    - totalcharges
 
   # Numeric features
   numeric_columns:
     - tenure
-    - MonthlyCharges
-    - TotalCharges
+    - monthlycharges
+    - totalcharges
 
   # Categorical features for One-Hot-Encoding
   categorical_columns:
@@ -77,4 +77,4 @@ features:
 
   # Columns that add no value to the model
   drop_columns:
-    - customerID
+    - customerid

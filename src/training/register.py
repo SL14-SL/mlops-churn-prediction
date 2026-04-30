@@ -1,3 +1,4 @@
+import pandas as pd
 import mlflow
 from mlflow.tracking import MlflowClient
 from src.configs.loader import load_config

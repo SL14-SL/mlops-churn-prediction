@@ -125,7 +125,7 @@ def _inject_runtime_env(config: dict[str, Any]) -> None:
     if isinstance(services, dict):
         prefect_api_url = services.get("prefect_api_url")
         if prefect_api_url:
-            os.environ["PREFECT_API_URL"] = str(prefect_api_url)
+            os.environ.setdefault("PREFECT_API_URL", str(prefect_api_url))
 
     # Support both nested and legacy placement
     tracking = config.get("tracking", {})

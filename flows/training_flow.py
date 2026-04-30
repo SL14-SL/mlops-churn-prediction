@@ -110,7 +110,7 @@ def task_prepare_data(is_drift_run: bool):
     ingest()
     run_feature_pipeline()
     p_logger.info("Skipping feature state snapshot (not required for this setup).")
-    split_logic(is_drift_run=is_drift_run)
+    split_logic()
 
 @task(name="Snapshot Dataset Version")
 def task_snapshot_dataset():
@@ -231,6 +231,12 @@ def task_refresh_api():
     # -------------------------
     # LOCAL / DEV MODE
     # -------------------------
+    if shutil.which("docker") is None:
+        p_logger.warning(
+            "Docker CLI not available. Skipping API refresh. "
+            "Restart the API container from the host if needed."
+        )
+        return
     if environment in ["dev", "local"]:
         try:
             subprocess.run(
