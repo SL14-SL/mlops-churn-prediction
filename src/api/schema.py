@@ -105,3 +105,7 @@ class PrioritizeRequest(PredictionRequest):
         ge=1,
         description="Return only the top N customers sorted by expected value",
     )
+    min_expected_value: float | None = Field(
+        default=None,
+        description="Only return customers with expected_value >= this threshold",
+    )

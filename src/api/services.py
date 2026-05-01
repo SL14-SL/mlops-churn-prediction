@@ -93,9 +93,21 @@ def attach_customer_ids(inputs: list[dict], results: list[dict]) -> list[dict]:
     return enriched
 
 
-def prioritize_results(results: list[dict], top_n: int | None = None) -> list[dict]:
+def prioritize_results(
+    results: list[dict],
+    top_n: int | None = None,
+    min_expected_value: float | None = None,
+) -> list[dict]:
+    prioritized = results
+
+    if min_expected_value is not None:
+        prioritized = [
+            r for r in prioritized
+            if float(r.get("expected_value") or 0.0) >= min_expected_value
+        ]
+
     prioritized = sorted(
-        results,
+        prioritized,
         key=lambda x: x.get("expected_value", 0.0),
         reverse=True,
     )

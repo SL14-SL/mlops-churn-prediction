@@ -328,7 +328,13 @@ def prioritize(payload: PrioritizeRequest):
         )
 
         enriched = attach_customer_ids(payload.inputs, output["results"])
-        prioritized = prioritize_results(enriched, top_n=payload.top_n)
+
+        prioritized = prioritize_results(
+            enriched,
+            top_n=payload.top_n,
+            min_expected_value=payload.min_expected_value,
+        )        
+
         business_kpis = compute_business_kpis(prioritized)
 
         return {
@@ -339,6 +345,7 @@ def prioritize(payload: PrioritizeRequest):
                 "total_input_rows": len(payload.inputs),
                 "top_n": payload.top_n,
                 "business_kpis": business_kpis,
+                "min_expected_value": payload.min_expected_value,
                 "model_name": MODEL_NAME,
                 "serving_alias": serving_alias,
                 "request_id": output["request_id"],
@@ -375,8 +382,12 @@ def export_prioritized(payload: PrioritizeRequest):
 
         # 2. Attach IDs + prioritize
         enriched = attach_customer_ids(payload.inputs, output["results"])
-        prioritized = prioritize_results(enriched, top_n=payload.top_n)
-
+        prioritized = prioritize_results(
+            enriched,
+            top_n=payload.top_n,
+            min_expected_value=payload.min_expected_value,
+        )
+        
         # 3. Convert to DataFrame
         df = pd.DataFrame(prioritized)
 
