@@ -32,6 +32,7 @@ def log_prediction(
     environment: str | None = None,
     action: str | None = None, 
     expected_value: float | None = None, 
+    customer_value: float | None = None,
 ) -> None:
     """
     Log prediction data to:
@@ -75,6 +76,7 @@ def log_prediction(
             "action": action,
             "expected_value": expected_value,
             "service": "prediction_api",
+            "customer_value": customer_value,
             **metadata,
         }
         print(json.dumps(log_entry), file=sys.stdout, flush=True)
@@ -83,6 +85,9 @@ def log_prediction(
         log_data = {
             **input_data,
             "prediction": prediction,
+            "action": action,
+            "expected_value": expected_value,
+            "customer_value": customer_value,
             **metadata,
         }
         df_new = pd.DataFrame([log_data])

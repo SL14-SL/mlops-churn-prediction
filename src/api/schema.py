@@ -59,6 +59,7 @@ class DecisionResult(BaseModel):
         (simple expected value calculation based on business assumptions)
     """
     churn_probability: float = Field(..., ge=0.0, le=1.0)
+    customer_value: float | None = Field(default=None)
     action: str = Field(..., description="Recommended business action")
     expected_value: float = Field(..., description="Estimated business value")
 

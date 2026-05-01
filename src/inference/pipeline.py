@@ -61,11 +61,12 @@ def align_features_for_model(
             else:
                 raw_features = model.metadata.get_input_schema().input_names()
 
-            model_features = [f.lower() for f in raw_features]
+            model_features = raw_features       #[f.lower() for f in raw_features]
             expected_dtypes = {}
 
         # --- 2. Normalize column names ---
-        df.columns = [str(col).lower() for col in df.columns]
+        # df.columns = [str(col).lower() for col in df.columns]
+        df.columns = [str(col) for col in df.columns]
 
         # --- 3. Add missing columns ---
         missing_cols = set(model_features) - set(df.columns)
@@ -110,33 +111,88 @@ def _build_decision_engine():
     return DecisionEngine(decision_config)
 
 
-def predict_and_decide(input_df: pd.DataFrame, model) -> list[dict]:
+def predict_and_decide(
+    input_df: pd.DataFrame,
+    model,
+    raw_input_df: pd.DataFrame | None = None,
+) -> list[dict]:
 
     decision_engine = _build_decision_engine()
 
-    # 1. Predict probabilities
+    # 1. Predict probabilities on model-ready features
     raw_preds = model.predict(input_df)
 
-    # Handle pyfunc output
     if isinstance(raw_preds, list) and isinstance(raw_preds[0], dict):
         probs = raw_preds[0]["probabilities"]
     else:
         probs = raw_preds
 
-    probs = np.asarray(probs).reshape(-1)   # <-- statt nur flatten
+    probs = np.asarray(probs).reshape(-1)
     probs = probs.astype(float)
 
-    # 2. Decision
-    # results = [decision_engine.decide(p) for p in probs]
-    results = [decision_engine.decide_batch(probs)]
-    if isinstance(results, list) and len(results) == 1 and isinstance(results[0], list):
-        results = results[0]
-        
-    logger.info(f"DEBUG decide_batch output: {results}")
-    logger.info(f"DEBUG probs shape: {np.array(raw_preds).shape}")
+    # 2. Use raw/validated input for business value estimation
+    value_df = raw_input_df if raw_input_df is not None else input_df
 
+    customer_values = estimate_customer_values(
+        df=value_df,
+        default_value=decision_engine.config.customer_value,
+    )
+
+    # Safety check
+    if len(customer_values) != len(probs):
+        raise ValueError(
+            f"customer_values length ({len(customer_values)}) "
+            f"does not match probs length ({len(probs)})"
+        )
+
+    # 3. Business decision
+    results = decision_engine.decide_batch(
+        probs=probs.tolist(),
+        customer_values=customer_values,
+    )
+
+    logger.info(f"DEBUG probs shape: {np.array(raw_preds).shape}")
+    logger.info(f"DEBUG customer_values: {customer_values}")
 
     return results
+
+
+def estimate_customer_values(
+    df: pd.DataFrame,
+    default_value: float,
+) -> list[float]:
+    """
+    Estimate per-customer value for churn decisions.
+
+    Strategy (Telco demo):
+    - base: monthlycharges
+    - multiplier: remaining lifetime approximation
+    """
+
+    if "monthlycharges" not in df.columns:
+        return [default_value] * len(df)
+
+    monthly = pd.to_numeric(df["monthlycharges"], errors="coerce").fillna(0)
+
+    # ---- Remaining lifetime heuristic ----
+    if "tenure" in df.columns:
+        tenure = pd.to_numeric(df["tenure"], errors="coerce").fillna(0)
+
+        # new customers more valuable (long future)
+        remaining_months = np.where(
+            tenure < 12,
+            12,
+            6
+        )
+    else:
+        remaining_months = 6
+
+    values = monthly * remaining_months
+
+    # safety floor (avoid 0-value customers)
+    values = values.clip(lower=default_value * 0.25)
+
+    return values.astype(float).tolist()
 
 def apply_prediction_postprocessing(
     predictions: list[float],

@@ -446,6 +446,7 @@ def predict(payload: PredictionRequest):
         results = predict_and_decide(
             input_df=final_df,
             model=model,
+            raw_input_df=validated_df,
         )
 
         timings["inference"] = _ms_since(t)
@@ -464,7 +465,9 @@ def predict(payload: PredictionRequest):
                 environment=environment,
                 action=result["action"],
                 expected_value=result["expected_value"],
+                customer_value=result.get("customer_value"),
             )
+        logger.info(f"DEBUG final results before response: {results}")
 
         return {
             "predictions": results,
