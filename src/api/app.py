@@ -570,6 +570,30 @@ def prioritize(payload: PrioritizeRequest):
         if payload.top_n is not None:
             prioritized = prioritized[: payload.top_n]
 
+        business_kpis = {
+            "total_expected_value": round(
+                sum(float(r.get("expected_value") or 0.0) for r in prioritized),
+                2,
+            ),
+            "avg_expected_value": round(
+                sum(float(r.get("expected_value") or 0.0) for r in prioritized) / len(prioritized),
+                2,
+            ) if prioritized else 0.0,
+            "total_customer_value": round(
+                sum(float(r.get("customer_value") or 0.0) for r in prioritized),
+                2,
+            ),
+            "discounts_selected": sum(
+                1 for r in prioritized if r.get("action") == "offer_discount"
+            ),
+            "emails_selected": sum(
+                1 for r in prioritized if r.get("action") == "send_email"
+            ),
+            "no_action_selected": sum(
+                1 for r in prioritized if r.get("action") == "no_action"
+            ),
+        }
+
         timings["total"] = _ms_since(request_started)
 
         return {
@@ -579,6 +603,7 @@ def prioritize(payload: PrioritizeRequest):
                 "rows": len(prioritized),
                 "total_input_rows": len(payload.inputs),
                 "top_n": payload.top_n,
+                "business_kpi": business_kpis,
                 "model_name": MODEL_NAME,
                 "serving_alias": serving_alias,
                 "request_id": request_id,
