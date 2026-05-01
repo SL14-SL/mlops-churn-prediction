@@ -58,6 +58,7 @@ class DecisionResult(BaseModel):
         Estimated monetary value of applying the action
         (simple expected value calculation based on business assumptions)
     """
+    customer_id: str | None = None 
     churn_probability: float = Field(..., ge=0.0, le=1.0)
     customer_value: float | None = Field(default=None)
     action: str = Field(..., description="Recommended business action")
@@ -96,4 +97,11 @@ class PredictionResponse(BaseModel):
     metadata: dict[str, Any] | None = Field(
         default=None,
         description="Optional metadata about the prediction run",
+    )
+
+class PrioritizeRequest(PredictionRequest):
+    top_n: int | None = Field(
+        default=None,
+        ge=1,
+        description="Return only the top N customers sorted by expected value",
     )

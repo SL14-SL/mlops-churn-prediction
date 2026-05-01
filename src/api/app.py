@@ -19,9 +19,8 @@ from fastapi.responses import PlainTextResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from starlette.status import HTTP_403_FORBIDDEN
 
-from src.api.schema import PredictionRequest, PredictionResponse
+from src.api.schema import PredictionRequest, PredictionResponse, PrioritizeRequest
 from src.configs.loader import load_config, get_path
-from src.inference.decision import DecisionEngine, DecisionConfig
 
 from src.monitoring.prediction_logger import log_prediction
 from src.monitoring.data_quality import (
@@ -485,3 +484,109 @@ def predict(payload: PredictionRequest):
     except Exception as e:
         logger.error(f"Prediction failed: {traceback.format_exc()}")
         raise HTTPException(status_code=400, detail=str(e))
+    
+@app.post("/prioritize", response_model=PredictionResponse)
+def prioritize(payload: PrioritizeRequest):
+    """
+    Prioritize customers by expected business value.
+
+    Uses the same churn prediction + decision engine as /predict,
+    but sorts results by expected_value descending and optionally
+    returns only the top N customers.
+    """
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model not ready.")
+
+    request_started = time.perf_counter()
+    timings: dict[str, float] = {}
+    request_id = payload.context.get("request_id", str(uuid4()))
+    environment = os.getenv("APP_ENV", "dev")
+
+    try:
+        # 1. Convert input list to DataFrame
+        t = time.perf_counter()
+        input_df = request_to_dataframe(payload.inputs)
+        timings["request_to_dataframe"] = _ms_since(t)
+
+        # 2. Basic validation
+        t = time.perf_counter()
+        validated_df = validate_prediction_input(input_df)
+        timings["validate_input"] = _ms_since(t)
+
+        # 3. Data quality
+        t = time.perf_counter()
+        try:
+            dq_summary = log_data_quality_runtime(
+                validated_df,
+                reference_categories=dq_reference_categories,
+            )
+        except Exception as dq_error:
+            dq_summary = {"status": "error", "message": str(dq_error)}
+        timings["data_quality"] = _ms_since(t)
+
+        # 4. Feature engineering
+        t = time.perf_counter()
+        processed_df = build_features(validated_df, config=TRAIN_CFG)
+        timings["preprocessing"] = _ms_since(t)
+
+        # 5. Feature alignment
+        t = time.perf_counter()
+        final_df = align_features_for_model(
+            processed_df=processed_df,
+            model=model,
+            model_type=model_type,
+            feature_schema=feature_schema,
+        )
+        timings["alignment"] = _ms_since(t)
+
+        # 6. Inference + business decision
+        t = time.perf_counter()
+        results = predict_and_decide(
+            input_df=final_df,
+            model=model,
+            raw_input_df=validated_df,
+        )
+        timings["inference"] = _ms_since(t)
+
+        # 7. Attach input/customer identity for prioritization output
+        prioritized = []
+
+        for original_input, result in zip(payload.inputs, results):
+            row = {
+                **result,
+                "customer_id": original_input.get("customerID")
+                or original_input.get("customer_id")
+                or original_input.get("customerid"),
+            }
+            prioritized.append(row)
+
+        # 8. Sort by expected business value
+        prioritized = sorted(
+            prioritized,
+            key=lambda x: x.get("expected_value", 0.0),
+            reverse=True,
+        )
+
+        if payload.top_n is not None:
+            prioritized = prioritized[: payload.top_n]
+
+        timings["total"] = _ms_since(request_started)
+
+        return {
+            "predictions": prioritized,
+            "status": "success",
+            "metadata": {
+                "rows": len(prioritized),
+                "total_input_rows": len(payload.inputs),
+                "top_n": payload.top_n,
+                "model_name": MODEL_NAME,
+                "serving_alias": serving_alias,
+                "request_id": request_id,
+                "timing_ms": timings,
+                "data_quality": dq_summary,
+            },
+        }
+
+    except Exception as e:
+        logger.exception("Prioritization failed")
+        raise HTTPException(status_code=500, detail=str(e))
