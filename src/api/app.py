@@ -14,7 +14,7 @@ from fastapi.responses import PlainTextResponse, StreamingResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from starlette.status import HTTP_403_FORBIDDEN
 
-from src.api.schema import PredictionRequest, PredictionResponse, PrioritizeRequest
+from src.api.schema import PredictionRequest, PredictionResponse, PrioritizeRequest, CampaignSimulationRequest
 from src.configs.loader import load_config, get_path
 
 from src.monitoring.prediction_logger import log_prediction
@@ -41,6 +41,7 @@ from src.api.services import (
     attach_customer_ids,
     prioritize_results,
     compute_business_kpis,
+    simulate_campaign,
 )
 
 from src.utils.logger import get_logger
@@ -387,7 +388,7 @@ def export_prioritized(payload: PrioritizeRequest):
             top_n=payload.top_n,
             min_expected_value=payload.min_expected_value,
         )
-        
+
         # 3. Convert to DataFrame
         df = pd.DataFrame(prioritized)
 
@@ -424,4 +425,61 @@ def export_prioritized(payload: PrioritizeRequest):
 
     except Exception as e:
         logger.exception("CSV export failed")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@app.post("/campaign/simulate", dependencies=[Depends(get_api_key)])
+def simulate_retention_campaign(payload: CampaignSimulationRequest):
+    """
+    Simulate a retention campaign based on prioritized churn decisions.
+
+    Returns campaign-level business impact metrics:
+    - total expected value
+    - action counts
+    - targeted customers
+    - actionable customers
+    """
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model not ready.")
+
+    try:
+        output = run_prediction_pipeline(
+            payload=payload,
+            model=model,
+            model_type=model_type,
+            feature_schema=feature_schema,
+            train_cfg=TRAIN_CFG,
+            dq_reference_categories=dq_reference_categories,
+        )
+
+        enriched = attach_customer_ids(payload.inputs, output["results"])
+
+        prioritized = prioritize_results(
+            enriched,
+            top_n=payload.top_n,
+            min_expected_value=payload.min_expected_value,
+        )
+
+        simulation = simulate_campaign(prioritized)
+
+        return {
+            "status": "success",
+            "campaign": {
+                "name": payload.campaign_name or "retention_campaign",
+                "top_n": payload.top_n,
+                "min_expected_value": payload.min_expected_value,
+                **simulation,
+            },
+            "metadata": {
+                "total_input_rows": len(payload.inputs),
+                "selected_rows": len(prioritized),
+                "model_name": MODEL_NAME,
+                "serving_alias": serving_alias,
+                "request_id": output["request_id"],
+                "timing_ms": output["timings"],
+                "data_quality": output["dq_summary"],
+            },
+        }
+
+    except Exception as e:
+        logger.exception("Campaign simulation failed")
         raise HTTPException(status_code=500, detail=str(e))

@@ -109,3 +109,10 @@ class PrioritizeRequest(PredictionRequest):
         default=None,
         description="Only return customers with expected_value >= this threshold",
     )
+
+class CampaignSimulationRequest(PrioritizeRequest):
+    campaign_name: str | None = Field(
+        default=None,
+        description="Optional campaign name for reporting",
+    )
+    

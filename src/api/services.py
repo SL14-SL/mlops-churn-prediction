@@ -139,3 +139,31 @@ def compute_business_kpis(results: list[dict]) -> dict:
             1 for r in results if r.get("action") == "no_action"
         ),
     }
+
+def simulate_campaign(results: list[dict]) -> dict:
+    total_expected_value = sum(
+        float(r.get("expected_value") or 0.0) for r in results
+    )
+    total_customer_value = sum(
+        float(r.get("customer_value") or 0.0) for r in results
+    )
+
+    action_counts = {
+        "offer_discount": sum(1 for r in results if r.get("action") == "offer_discount"),
+        "send_email": sum(1 for r in results if r.get("action") == "send_email"),
+        "no_action": sum(1 for r in results if r.get("action") == "no_action"),
+    }
+
+    actionable_results = [
+        r for r in results if r.get("action") != "no_action"
+    ]
+
+    return {
+        "targeted_customers": len(results),
+        "actionable_customers": len(actionable_results),
+        "total_expected_value": round(total_expected_value, 2),
+        "avg_expected_value": round(total_expected_value / len(results), 2)
+        if results else 0.0,
+        "total_customer_value": round(total_customer_value, 2),
+        "action_counts": action_counts,
+    }
