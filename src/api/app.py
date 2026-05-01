@@ -1,12 +1,15 @@
 import os
 import traceback
 import time
+import io
+import pandas as pd
+from datetime import datetime
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Security, Depends, Response, Request
 from fastapi.security.api_key import APIKeyHeader
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse
 
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from starlette.status import HTTP_403_FORBIDDEN
@@ -346,4 +349,68 @@ def prioritize(payload: PrioritizeRequest):
 
     except Exception as e:
         logger.exception("Prioritization failed")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+
+@app.post("/prioritize/export", dependencies=[Depends(get_api_key)])
+def export_prioritized(payload: PrioritizeRequest):
+    """
+    Export prioritized customers as CSV.
+
+    Uses the same pipeline as /prioritize but returns a downloadable CSV file.
+    """
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model not ready.")
+
+    try:
+        # 1. Run shared pipeline
+        output = run_prediction_pipeline(
+            payload=payload,
+            model=model,
+            model_type=model_type,
+            feature_schema=feature_schema,
+            train_cfg=TRAIN_CFG,
+            dq_reference_categories=dq_reference_categories,
+        )
+
+        # 2. Attach IDs + prioritize
+        enriched = attach_customer_ids(payload.inputs, output["results"])
+        prioritized = prioritize_results(enriched, top_n=payload.top_n)
+
+        # 3. Convert to DataFrame
+        df = pd.DataFrame(prioritized)
+
+        # Optional: nicer column order
+        preferred_cols = [
+            "customer_id",
+            "churn_probability",
+            "customer_value",
+            "action",
+            "expected_value",
+        ]
+
+        cols = [c for c in preferred_cols if c in df.columns]
+        df = df[cols]
+
+        # 4. Convert to CSV
+        buffer = io.StringIO()
+        df.to_csv(buffer, index=False)
+        buffer.seek(0)
+
+        # 5. Filename
+        date_str = datetime.utcnow().strftime("%y%m%d")
+
+        filename = f"{date_str}_prioritized_customers.csv"
+
+        # 6. Return as file download
+        return StreamingResponse(
+            iter([buffer.getvalue()]),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}"
+            },
+        )
+
+    except Exception as e:
+        logger.exception("CSV export failed")
         raise HTTPException(status_code=500, detail=str(e))
