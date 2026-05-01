@@ -3,6 +3,7 @@ import json
 import socket
 import traceback
 import time
+import shap
 import pandas as pd
 import numpy as np
 from contextlib import asynccontextmanager
@@ -41,6 +42,8 @@ from src.inference.pipeline import (
 from src.inference.adapters import request_to_dataframe
 from src.inference.router import load_registry_model
 from src.inference.schema import load_feature_schema
+from src.training.explainability import prepare_shap_input
+
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -168,6 +171,107 @@ async def lifespan(app: FastAPI):
     finally:
         logger.info("Shutdown: Cleaning up resources.")
 
+def cast_to_feature_schema(df: pd.DataFrame, schema: dict) -> pd.DataFrame:
+    """
+    Cast dataframe columns back to the MLflow model schema.
+
+    Needed because SHAP uses numeric arrays, while MLflow pyfunc enforces the original input schema.
+    """
+    df = df.copy()
+
+    for col, dtype in schema.get("dtypes", {}).items():
+        if col not in df.columns:
+            continue
+
+        if dtype == "bool":
+            df[col] = df[col].astype(bool)
+        elif dtype.startswith("int"):
+            df[col] = df[col].round().astype(dtype)
+        elif dtype.startswith("float"):
+            df[col] = df[col].astype(dtype)
+
+    return df
+
+def load_shap_background() -> pd.DataFrame:
+    """
+    Load a small feature background dataset for SHAP explanations.
+
+    Uses training split features as the reference population.
+    """
+    train_path = Path(get_path("splits")) / "train.parquet"
+    df = pd.read_parquet(train_path)
+
+    target_col = TRAIN_CFG["data"]["target_column"]
+    drop_cols = [target_col] + TRAIN_CFG.get("features", {}).get("drop_columns", [])
+
+    X = df.drop(columns=drop_cols, errors="ignore")
+    X = align_features_for_model(
+        processed_df=X,
+        model=model,
+        model_type=model_type,
+        feature_schema=feature_schema,
+    )
+
+    return prepare_shap_input(X.sample(min(200, len(X)), random_state=42))
+
+
+def explain_single_prediction(final_df: pd.DataFrame, top_n: int = 5) -> list[dict]:
+    """
+    Explain a single prediction using SHAP values.
+
+    Returns the top features contributing to the model output.
+    """
+    if len(final_df) != 1:
+        raise ValueError("Explanation currently supports exactly one row.")
+
+    shap_input = prepare_shap_input(final_df)
+    background = load_shap_background()
+
+    def predict_fn(x):
+        x_df = pd.DataFrame(x, columns=shap_input.columns)
+        x_df = cast_to_feature_schema(x_df, feature_schema)
+        preds = model.predict(x_df)
+        return np.asarray(preds).reshape(-1)
+
+    explainer = shap.Explainer(predict_fn, background)
+    shap_values = explainer(shap_input)
+
+    values = shap_values.values[0]
+
+    explanation_df = pd.DataFrame(
+        {
+            "feature": shap_input.columns,
+            "impact": values,
+            "abs_impact": np.abs(values),
+            "value": shap_input.iloc[0].values,
+        }
+    )
+
+    explanation_df = explanation_df[explanation_df["abs_impact"] > 1e-6].copy()
+
+    if explanation_df.empty:
+        return []
+
+    explanation_df["direction"] = np.where(
+        explanation_df["impact"] > 0,
+        "increases_churn",
+        "reduces_churn",
+    )
+
+    total_abs_impact = explanation_df["abs_impact"].sum()
+    explanation_df["impact_pct"] = (
+        explanation_df["abs_impact"] / total_abs_impact * 100
+    ).round(2)
+
+    explanation_df = explanation_df.sort_values("abs_impact", ascending=False)
+
+    return (
+        explanation_df.head(top_n)
+        .drop(columns=["abs_impact"])
+        .to_dict(orient="records")
+    )
+
+
 app = FastAPI(title="Churn Prediction API", lifespan=lifespan)
 SERVING_CFG = get_serving_settings()
 
@@ -234,6 +338,56 @@ def health(response: Response):
         "model_version": serving_model_version
     }
 
+@app.post("/explain", dependencies=[Depends(get_api_key)])
+def explain(payload: PredictionRequest, top_n: int = 5):
+    """
+    Return churn prediction with top feature-level explanation.
+
+    Intended for debugging, demos, and customer-level model interpretation.
+    """
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model not ready.")
+
+    if len(payload.inputs) != 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Explain endpoint currently supports exactly one input row.",
+        )
+
+    try:
+        input_df = request_to_dataframe(payload.inputs)
+        validated_df = validate_prediction_input(input_df)
+        processed_df = build_features(validated_df, config=TRAIN_CFG)
+
+        final_df = align_features_for_model(
+            processed_df=processed_df,
+            model=model,
+            model_type=model_type,
+            feature_schema=feature_schema,
+        )
+
+        prediction = predict_and_decide(
+            input_df=final_df,
+            model=model,
+        )[0]
+
+        explanation = explain_single_prediction(final_df, top_n=top_n)
+
+        return {
+            "status": "success",
+            "prediction": prediction,
+            "top_reasons": explanation,
+            "metadata": {
+                "model_name": MODEL_NAME,
+                "serving_alias": serving_alias,
+                "model_version": serving_model_version,
+            },
+        }
+
+    except Exception as e:
+        logger.error(f"Explanation failed: {traceback.format_exc()}")
+        raise HTTPException(status_code=400, detail=str(e))
+
 @app.post("/predict", dependencies=[Depends(get_api_key)], response_model=PredictionResponse)
 def predict(payload: PredictionRequest):
     """
@@ -285,19 +439,7 @@ def predict(payload: PredictionRequest):
             feature_schema=feature_schema,
         )
         timings["alignment"] = _ms_since(t)
-        # cat_base_cols = TRAIN_CFG.get("features", {}).get("categorical_columns", [])
-
-        # for col in final_df.columns:
-        #     # Eine Spalte ist eine OHE-Spalte, wenn sie mit einem Kategorienamen beginnt
-        #     is_ohe_col = any(col.startswith(f"{base}_") for base in cat_base_cols)
-            
-        #     if is_ohe_col:
-        #         # Nur diese Spalten werden zu bool
-        #         final_df[col] = final_df[col].astype(bool)
-        #     elif col in ["tenure", "monthlycharges", "totalcharges"]:
-        #         # Diese Spalten müssen explizit numerisch bleiben
-        #         final_df[col] = pd.to_numeric(final_df[col], errors="coerce")
-
+        
         # 6. Model Inference (Batch prediction)
         t = time.perf_counter()
 
