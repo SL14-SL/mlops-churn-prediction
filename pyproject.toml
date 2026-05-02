@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "churn_prediciton_mlops"
+name = "churn_prediction_mlops"
 version = "0.1.0"
 description = "Reusable MLOps template for forecasting projects"
 requires-python = ">=3.12,<3.13"

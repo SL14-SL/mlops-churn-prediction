@@ -265,7 +265,7 @@ wheels = [
 ]
 
 [[package]]
-name = "churn-prediciton-mlops"
+name = "churn-prediction-mlops"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
