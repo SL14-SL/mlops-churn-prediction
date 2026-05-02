@@ -1,13 +1,48 @@
 environment: staging
+project_name: churn-prediction-mlops
+random_seed: 42
 
-mlflow_tracking_uri: "http://staging-mlflow-server:5000"
-model_registry_name: "demand-forecasting-staging"
+model:
+  registry_name: churn-prediction-model-staging
 
-# Hier nutzt du oft schon Cloud-Pfade, aber in einem Test-Bucket
+tracking:
+  mlflow_tracking_uri: ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
+
+services:
+  prefect_api_url: ${PREFECT_API_URL:-http://prefect:4200/api}
+  mlflow_ui_url: ${MLFLOW_UI_URL:-http://mlflow:5000}
+
+api:
+  url: ${PREDICTION_API_URL:-http://api:8080/predict}
+
+orchestration:
+  deployment_name: auto-retrain
+  work_pool: staging-pool
+  retrain_cron: "0 3 * * *"
+
 paths:
-  raw_data: "gs://mlops-staging-bucket/data/raw"
-  models: "gs://mlops-staging-bucket/models"
+  raw_data: data/raw
+  validated_data: data/validation
+  features: data/features
+  splits: data/splits
+  models: models
+  predictions: data/predictions
+  monitoring: data/monitoring
+  versioning: data/versioning
 
-monitoring:
-  # Staging kann strengere Schwellenwerte haben, um Fehler früh zu finden
-  rmse_threshold: 550
+costs:
+  training:
+    enabled: true
+    currency: EUR
+    estimated_hourly_rate: 0.6
+  scenarios: 
+    drift_triggered_runs_per_month: 8
+
+decision:
+  customer_value: 100
+  cost_discount: 10
+  cost_contact: 2
+  discount_uplift: 0.3
+  contact_uplift: 0.1
+  max_discount_budget: 20
+  max_discount_rate: 0.2
