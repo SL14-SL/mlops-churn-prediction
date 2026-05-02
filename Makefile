@@ -112,12 +112,12 @@ train-force: wait-prefect ## Execute training with force flag
 	@uv run --active prefect config set PREFECT_API_URL=$(PREFECT_API_URL)
 	uv run --active python flows/training_flow.py --force
 
-predict-test: ## Send a sample prediction request and format output
-	@echo "🧪 Sending test prediction request..."
+predict-test:
+	@echo "🧪 Sending test request..."
 	@curl -s -X POST http://localhost:8000/predict \
 		-H "Content-Type: application/json" \
 		-H "X-API-KEY: $(API_KEY)" \
-		-d '{"inputs":[{"Store":1,"DayOfWeek":1,"Date":"2026-03-08","Open":1,"Customers":500,"Promo":1,"StateHoliday":"0","SchoolHoliday":0}]}' \
+		-d '{"inputs":[{"customerID":"7590-VHVEG","gender":"Female","SeniorCitizen":0,"Partner":"Yes","Dependents":"No","tenure":1,"PhoneService":"No","MultipleLines":"No phone service","InternetService":"DSL","OnlineSecurity":"No","OnlineBackup":"Yes","DeviceProtection":"No","TechSupport":"No","StreamingTV":"No","StreamingMovies":"No","Contract":"Month-to-month","PaperlessBilling":"Yes","PaymentMethod":"Electronic check","MonthlyCharges":29.85,"TotalCharges":"29.85"}]}' \
 		| jq .
 
 # --- Quality Assurance ---
