@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import argparse
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -19,9 +20,8 @@ RAW_DATA_PATH = Path(get_path("raw_data"))
 PREDICTIONS_PATH = Path(get_path("predictions"))
 
 SIMULATION_FILE = RAW_DATA_PATH / "simulation_ground_truth.csv"
-BATCH_DIR = Path(get_path("monitoring")) / "ground_truth_batches"
 INFERENCE_LOG_FILE = PREDICTIONS_PATH / "inference_log.parquet"
-TRAINING_BATCH_DIR = Path(get_path("raw_data")) / "new_batches"
+PENDING_LABEL_DIR = Path(get_path("monitoring")) / "pending_labels"
 
 API_URL = CFG["api"]["url"]
 API_KEY = os.getenv("API_KEY")
@@ -125,20 +125,16 @@ def load_logged_predictions(request_id: str, expected_rows: int) -> pd.DataFrame
     return latest_preds
 
 
-def simulate_labeled_batch(batch_size: int = 50) -> Path:
+def simulate_labeled_batch(
+    batch_size: int = 50,
+    simulation_day: int = 1,
+    label_delay_days: int = 1,
+) -> Path:
     """
-    Generate a labeled churn batch from the holdout simulation dataset.
+    Score a holdout batch and store its labels as pending.
 
-    Flow:
-    1. Load `simulation_ground_truth.csv`, which was held out during ingestion.
-    2. Split labels from features.
-    3. Send unlabeled features to the prediction API.
-    4. Read the API-generated predictions from the inference log.
-    5. Join logged predictions with the real holdout labels.
-    6. Persist a labeled ground-truth batch for performance monitoring.
-
-    Returns:
-        Path to the generated ground-truth batch CSV file.
+    The batch is removed from the simulation pool immediately, but the true
+    labels are only released later by `release_churn_labels.py`.
     """
     if not SIMULATION_FILE.exists():
         raise FileNotFoundError(f"Simulation file not found: {SIMULATION_FILE}")
@@ -155,30 +151,11 @@ def simulate_labeled_batch(batch_size: int = 50) -> Path:
         raise KeyError("Simulation file must contain `customerID` or `customerid`.")
 
     batch = get_next_batch(df, batch_size=batch_size)
-
-    training_batch = batch.copy()
-
-    ground_truth = batch.copy()
-    ground_truth = normalize_customer_id_column(ground_truth)
-    ground_truth = ground_truth[["customerid", "Churn"]].copy()
-    ground_truth = ground_truth.rename(columns={"Churn": "churn"})
-
-    ground_truth["churn"] = (
-        ground_truth["churn"]
-        .astype(str)
-        .str.strip()
-        .str.lower()
-        .map({"yes": 1, "no": 0, "1": 1, "0": 0})
-    )
-
-    if ground_truth["churn"].isna().any():
-        raise ValueError("Ground truth contains invalid churn labels.")
-
     features = batch.drop(columns=["Churn"])
-    request_id = f"simulate-churn-{uuid4()}"
+
+    request_id = f"simulate-churn-day-{simulation_day:03d}-{uuid4()}"
 
     logger.info("📡 Sending batch of size %s to prediction API...", len(features))
-
     call_prediction_api(features, request_id=request_id)
 
     latest_preds = load_logged_predictions(
@@ -186,46 +163,74 @@ def simulate_labeled_batch(batch_size: int = 50) -> Path:
         expected_rows=len(features),
     )
 
-    merged = latest_preds.merge(
-        ground_truth,
+    raw_batch = normalize_customer_id_column(batch)
+    latest_preds = normalize_customer_id_column(latest_preds)
+
+    pending_df = latest_preds.merge(
+        raw_batch,
         on="customerid",
         how="left",
+        suffixes=("", "_raw"),
     )
 
-    if merged["churn"].isna().any():
-        missing = int(merged["churn"].isna().sum())
-        raise ValueError(f"Failed to join ground truth for {missing} prediction rows.")
+    if "Churn" not in pending_df.columns:
+        raise ValueError("Pending batch does not contain raw `Churn` labels.")
 
+    pending_df["churn"] = (
+        pending_df["Churn"]
+        .astype(str)
+        .str.strip()
+        .str.lower()
+        .map({"yes": 1, "no": 0, "1": 1, "0": 0})
+    )
+
+    if pending_df["churn"].isna().any():
+        raise ValueError("Ground truth contains invalid churn labels.")
+
+    label_available_day = simulation_day + label_delay_days
     now = datetime.now(timezone.utc)
 
-    merged["label_available_at"] = now.isoformat()
-    merged["label_batch_id"] = str(uuid4())
+    pending_df["simulation_day"] = simulation_day
+    pending_df["label_available_day"] = label_available_day
+    pending_df["label_created_at"] = now.isoformat()
+    pending_df["pending_batch_id"] = str(uuid4())
 
-    BATCH_DIR.mkdir(parents=True, exist_ok=True)
+    PENDING_LABEL_DIR.mkdir(parents=True, exist_ok=True)
 
     timestamp = now.strftime("%Y%m%d_%H%M%S")
-    output_file = BATCH_DIR / f"ground_truth_churn_{timestamp}.csv"
+    pending_file = (
+        PENDING_LABEL_DIR
+        / f"pending_churn_day_{simulation_day:03d}_available_day_{label_available_day:03d}_{timestamp}.csv"
+    )
 
-    merged.to_csv(output_file, index=False)
-
-    logger.info("✅ Labeled batch saved: %s", output_file)
-    logger.info("Rows: %s", len(merged))
-    logger.info("Churn rate: %.2f%%", merged["churn"].mean() * 100)
-
-    print(f"Ground truth batch written: {output_file}")
-    print(f"Rows: {len(merged)}")
-    print(f"Churn rate: {merged['churn'].mean():.2%}")
-
-    TRAINING_BATCH_DIR.mkdir(parents=True, exist_ok=True)
-
-    training_output_file = TRAINING_BATCH_DIR / f"train_batch_churn_{timestamp}.csv"
-    training_batch.to_csv(training_output_file, index=False)
+    pending_df.to_csv(pending_file, index=False)
 
     remaining = df.iloc[len(batch):].copy()
     remaining.to_csv(SIMULATION_FILE, index=False)
 
-    return output_file
+    logger.info("✅ Pending churn batch saved: %s", pending_file)
+    logger.info("Rows: %s", len(pending_df))
+    logger.info("Churn rate: %.2f%%", pending_df["churn"].mean() * 100)
+    logger.info("Label available on simulation day: %s", label_available_day)
+    logger.info("Remaining simulation rows: %s", len(remaining))
 
+    print(f"Pending churn batch written: {pending_file}")
+    print(f"Rows: {len(pending_df)}")
+    print(f"Churn rate: {pending_df['churn'].mean():.2%}")
+    print(f"Label available day: {label_available_day}")
+    print(f"Remaining simulation rows: {len(remaining)}")
+
+    return pending_file
 
 if __name__ == "__main__":
-    simulate_labeled_batch()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--batch-size", type=int, default=50)
+    parser.add_argument("--simulation-day", type=int, default=1)
+    parser.add_argument("--label-delay-days", type=int, default=1)
+    args = parser.parse_args()
+
+    simulate_labeled_batch(
+        batch_size=args.batch_size,
+        simulation_day=args.simulation_day,
+        label_delay_days=args.label_delay_days,
+    )

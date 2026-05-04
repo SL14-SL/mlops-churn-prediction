@@ -117,7 +117,7 @@ def build_cumulative_ground_truth() -> pd.DataFrame:
     if not batch_files:
         raise FileNotFoundError(
             f"No churn ground truth batches found in {BATCH_DIR}. "
-            "Run `python scripts/simulate_churn_batch.py` first."
+            "Run `python scripts/release_churn_labels.py --simulation-day <day>` first."
         )
 
     frames = [pd.read_csv(path) for path in batch_files]
