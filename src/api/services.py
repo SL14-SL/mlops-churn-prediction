@@ -24,6 +24,7 @@ def run_prediction_pipeline(
     feature_schema: dict | None,
     train_cfg: dict,
     dq_reference_categories: dict,
+    decision_threshold: float = 0.5,
 ):
     request_started = time.perf_counter()
     timings: dict[str, float] = {}
@@ -66,6 +67,7 @@ def run_prediction_pipeline(
         input_df=final_df,
         model=model,
         raw_input_df=validated_df,
+        decision_threshold=decision_threshold,
     )
     timings["inference"] = ms_since(t)
     timings["total"] = ms_since(request_started)

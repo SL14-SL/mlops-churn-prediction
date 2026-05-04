@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+import mlflow
+from mlflow.tracking import MlflowClient
 
 import pandas as pd
 from sklearn.metrics import (
@@ -12,7 +14,7 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 
-from src.configs.loader import get_path
+from src.configs.loader import get_path, load_config
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -27,6 +29,23 @@ CUMULATIVE_GT_FILE = MONITORING_PATH / "cumulative_ground_truth.csv"
 PERFORMANCE_HISTORY_FILE = MONITORING_PATH / "churn_performance_history.parquet"
 
 
+def load_champion_decision_threshold(default: float = 0.5) -> float:
+    """Load the decision threshold from the current champion model run."""
+    model_name = load_config()["model"]["registry_name"]
+    client = MlflowClient()
+
+    try:
+        mv = client.get_model_version_by_alias(model_name, "champion")
+        run = client.get_run(mv.run_id)
+        return float(run.data.params.get("decision_threshold", default))
+    except Exception as exc:
+        logger.warning(
+            "Could not load champion decision threshold. Falling back to %.2f. Reason: %s",
+            default,
+            exc,
+        )
+        return default
+    
 def normalize_customer_id_column(df: pd.DataFrame) -> pd.DataFrame:
     """
     Normalize customer id column names to `customerid`.
@@ -59,8 +78,13 @@ def load_predictions() -> pd.DataFrame:
     if "prediction" not in df.columns:
         raise KeyError("Prediction log must contain probability column `prediction`.")
 
+    decision_threshold = load_champion_decision_threshold()
+
     df["churn_probability"] = pd.to_numeric(df["prediction"], errors="coerce")
-    df["churn_prediction"] = (df["churn_probability"] >= 0.5).astype(int)
+    df["churn_prediction"] = (
+        df["churn_probability"] >= decision_threshold
+    ).astype(int)
+    df["decision_threshold"] = decision_threshold
 
     if "expected_value" in df.columns:
         df["expected_profit"] = pd.to_numeric(df["expected_value"], errors="coerce")
@@ -148,7 +172,7 @@ def join_predictions_with_ground_truth(
     return joined
 
 
-def compute_churn_metrics(joined: pd.DataFrame) -> dict:
+def compute_churn_metrics(joined: pd.DataFrame, decision_threshold: float) -> dict:
     """
     Compute churn classification, calibration, and business metrics.
     """
@@ -172,9 +196,10 @@ def compute_churn_metrics(joined: pd.DataFrame) -> dict:
         "window_start": window_start,
         "window_end": window_end,
         "n_samples": int(len(joined)),
+        "decision_threshold": float(decision_threshold),
         "churn_rate": float(y_true.mean()),
         "avg_churn_probability": float(y_prob.mean()),
-        "high_risk_share": float((y_prob >= 0.5).mean()),
+        "high_risk_share": float((y_prob >= decision_threshold).mean()),
         "f1_score": float(f1_score(y_true, y_pred, zero_division=0)),
         "recall": float(recall_score(y_true, y_pred, zero_division=0)),
         "precision": float(precision_score(y_true, y_pred, zero_division=0)),
@@ -245,7 +270,8 @@ def main() -> None:
     ground_truth = build_cumulative_ground_truth()
     joined = join_predictions_with_ground_truth(predictions, ground_truth)
 
-    metrics = compute_churn_metrics(joined)
+    decision_threshold = load_champion_decision_threshold()
+    metrics = compute_churn_metrics(joined, decision_threshold)
 
     retrain_needed, retrain_reason = should_retrain(metrics)
     metrics["retrain_triggered"] = retrain_needed

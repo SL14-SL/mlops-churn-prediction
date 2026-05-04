@@ -50,7 +50,7 @@ def reload_serving_model(
     """
     mlflow.set_tracking_uri(resolve_tracking_uri(cfg))
 
-    model, model_type, serving_alias, model_uri = load_registry_model(model_name)
+    model, model_type, serving_alias, model_uri, decision_threshold = load_registry_model(model_name)
 
     feature_schema = load_feature_schema()
 
@@ -79,4 +79,5 @@ def reload_serving_model(
         "serving_model_run_id": serving_model_run_id,
         "feature_schema": feature_schema,
         "model_name": model_name,
+        "decision_threshold": decision_threshold,
     }

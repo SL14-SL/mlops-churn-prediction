@@ -37,13 +37,32 @@ def _load_and_prep_val_data():
     )
     return X_val, y_val
 
-def _generate_and_log_plots(model, X_val, y_val, run_id):
+def get_decision_threshold_from_run(run_id: str, default: float = 0.5) -> float:
+    client = MlflowClient()
+    run = client.get_run(run_id)
+    value = run.data.params.get("decision_threshold")
+
+    if value is None:
+        return default
+
+    return float(value)
+
+
+def predict_with_threshold(model, X_val, threshold: float):
+    preds = model.predict(X_val)
+
+    # pyfunc returns probabilities for your churn model
+    if hasattr(preds, "dtype") and preds.dtype.kind in {"f", "c"}:
+        return (preds >= threshold).astype(int)
+
+    return preds
+
+def _generate_and_log_plots(model, X_val, y_val, run_id, threshold: float = 0.5):
     """Generates evaluation plots and logs them to the specific MLflow run."""
     logger.info(f"Generating evaluation plots for run {run_id}...")
     
     # 1. Predict (Handle pyfunc potential probabilistic output)
-    preds = model.predict(X_val)
-    preds = (preds > 0.5).astype(int) if preds.dtype == float else preds
+    preds = predict_with_threshold(model, X_val, threshold)
     
     # 2. Confusion Matrix Plot
     cm = confusion_matrix(y_val, preds)
@@ -115,11 +134,11 @@ def compare_models(new_run_id: str, val_path: str | None = None):
     challenger = mlflow.pyfunc.load_model(challenger_uri)
     
     # Predict for metric calculation
-    chall_preds = challenger.predict(X_val)
-    chall_preds = (chall_preds > 0.5).astype(int) if chall_preds.dtype == float else chall_preds
-    
+    challenger_threshold = get_decision_threshold_from_run(new_run_id)
+    chall_preds = predict_with_threshold(challenger, X_val, challenger_threshold)
     chall_f1 = f1_score(y_val, chall_preds)
     metrics = {"challenger_f1": float(chall_f1)}
+    metrics["challenger_decision_threshold"] = challenger_threshold
     
     # --- ADDED: Generate and log plots ---
     _generate_and_log_plots(challenger, X_val, y_val, new_run_id)
@@ -129,12 +148,15 @@ def compare_models(new_run_id: str, val_path: str | None = None):
         champion_uri = f"models:/{MODEL_NAME}@champion"
         logger.info(f"Evaluating current Champion from Registry: {champion_uri}")
         
+        mv = client.get_model_version_by_alias(MODEL_NAME, "champion")
+        champion_threshold = get_decision_threshold_from_run(mv.run_id)
+
         champion = mlflow.pyfunc.load_model(champion_uri)
-        champ_preds = champion.predict(X_val)
-        champ_preds = (champ_preds > 0.5).astype(int) if champ_preds.dtype == float else champ_preds
-        
+        champ_preds = predict_with_threshold(champion, X_val, champion_threshold)
+
         champ_f1 = f1_score(y_val, champ_preds)
         metrics["champion_f1"] = float(champ_f1)
+        metrics["champion_decision_threshold"] = champion_threshold
         
         logger.info(f"Comparison: Challenger F1 ({chall_f1:.4f}) vs Champion F1 ({champ_f1:.4f})")
 

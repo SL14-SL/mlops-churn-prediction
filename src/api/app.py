@@ -63,6 +63,7 @@ dq_reference_categories: dict[str, set[str]] = {}
 serving_model_version = None
 serving_model_run_id = None
 feature_schema = None
+decision_threshold = 0.5
 
 # API Key Security Configuration
 API_KEY_NAME = "X-API-KEY"
@@ -84,7 +85,7 @@ def reload_serving_model() -> dict:
     """
     Reload model state and update API globals.
     """
-    global model, model_type, serving_alias, model_uri
+    global model, model_type, serving_alias, model_uri, decision_threshold
     global serving_model_version, serving_model_run_id, feature_schema
 
     state = reload_model_state(
@@ -99,6 +100,7 @@ def reload_serving_model() -> dict:
     serving_model_version = state["serving_model_version"]
     serving_model_run_id = state["serving_model_run_id"]
     feature_schema = state["feature_schema"]
+    decision_threshold = state.get("decision_threshold", 0.5)
 
     return {
         "model_name": MODEL_NAME,
@@ -106,6 +108,7 @@ def reload_serving_model() -> dict:
         "model_version": serving_model_version,
         "model_run_id": serving_model_run_id,
         "model_uri": model_uri,
+        "decision_threshold": decision_threshold,
     }
 
 @asynccontextmanager
@@ -278,6 +281,7 @@ def predict(payload: PredictionRequest):
             feature_schema=feature_schema,
             train_cfg=TRAIN_CFG,
             dq_reference_categories=dq_reference_categories,
+            decision_threshold=decision_threshold,
         )
 
         results = output["results"]
@@ -326,6 +330,7 @@ def prioritize(payload: PrioritizeRequest):
             feature_schema=feature_schema,
             train_cfg=TRAIN_CFG,
             dq_reference_categories=dq_reference_categories,
+            decision_threshold=decision_threshold,
         )
 
         enriched = attach_customer_ids(payload.inputs, output["results"])
@@ -379,6 +384,7 @@ def export_prioritized(payload: PrioritizeRequest):
             feature_schema=feature_schema,
             train_cfg=TRAIN_CFG,
             dq_reference_categories=dq_reference_categories,
+            decision_threshold=decision_threshold,
         )
 
         # 2. Attach IDs + prioritize
@@ -449,6 +455,7 @@ def simulate_retention_campaign(payload: CampaignSimulationRequest):
             feature_schema=feature_schema,
             train_cfg=TRAIN_CFG,
             dq_reference_categories=dq_reference_categories,
+            decision_threshold=decision_threshold,
         )
 
         enriched = attach_customer_ids(payload.inputs, output["results"])

@@ -1,11 +1,11 @@
 import os
-import hashlib
 import json
 import time 
 from datetime import datetime, timezone
 import gcsfs
 import mlflow
 import pandas as pd
+import numpy as np
 from pathlib import Path
 
 from sklearn.metrics import (
@@ -83,6 +83,45 @@ def save_feature_schema(df: pd.DataFrame, path: str = "models/feature_schema.jso
 
     return schema
 
+def find_best_threshold(
+    y_true,
+    y_proba,
+    *,
+    metric: str = "f1",
+    thresholds: np.ndarray | None = None,
+) -> tuple[float, float]:
+    """
+    Find the best classification threshold on validation data.
+
+    Args:
+        y_true: Ground-truth labels.
+        y_proba: Predicted churn probabilities.
+        metric: Optimization metric. Currently supports "f1".
+        thresholds: Candidate thresholds.
+
+    Returns:
+        Best threshold and best metric score.
+    """
+    if thresholds is None:
+        thresholds = np.arange(0.10, 0.91, 0.01)
+
+    best_threshold = 0.5
+    best_score = -1.0
+
+    for threshold in thresholds:
+        y_pred = (y_proba >= threshold).astype(int)
+
+        if metric == "f1":
+            score = f1_score(y_true, y_pred, zero_division=0)
+        else:
+            raise ValueError(f"Unsupported threshold metric: {metric}")
+
+        if score > best_score:
+            best_score = score
+            best_threshold = float(threshold)
+
+    return best_threshold, float(best_score)
+
 def train(train_file: str | None = None, val_file: str | None = None):
     """Main training task for Churn Classification."""
     data_path = get_path("splits")
@@ -143,21 +182,31 @@ def train(train_file: str | None = None, val_file: str | None = None):
             logger.warning(f"SHAP logging skipped: {e}")
 
         # Metrics Calculation
-        preds = model.predict(X_val)
-        y_proba = model.predict_proba(X_val)[:,1]
-        acc = accuracy_score(y_val, preds)
-        prec = precision_score(y_val, preds)
-        rec = recall_score(y_val, preds)
-        f1 = f1_score(y_val, preds)
-        roc_auc = roc_auc_score(y_val, y_proba)
-        brier_score = brier_score_loss(y_val, y_proba)
-        
-        metrics = {"accuracy": acc, "precision": prec, "recall": rec, "f1_score": f1, "roc_auc": roc_auc, "brier": brier_score}
-        
+        y_proba = model.predict_proba(X_val)[:, 1]
+
+        best_threshold, best_threshold_score = find_best_threshold(
+            y_val,
+            y_proba,
+            metric="f1",
+        )
+
+        y_pred = (y_proba >= best_threshold).astype(int)
+
+        metrics = {
+            "accuracy": accuracy_score(y_val, y_pred),
+            "precision": precision_score(y_val, y_pred, zero_division=0),
+            "recall": recall_score(y_val, y_pred, zero_division=0),
+            "f1_score": f1_score(y_val, y_pred, zero_division=0),
+            "roc_auc": roc_auc_score(y_val, y_proba),
+            "brier_score": brier_score_loss(y_val, y_proba),
+            "decision_threshold": best_threshold,
+        }
+
         # Logging
         mlflow.log_params(model_cfg.get("params", {}))
         mlflow.log_param("model_type", model_type)
         mlflow.log_metrics(metrics)
+        mlflow.log_param("decision_threshold", best_threshold)
         mlflow.log_metric("duration_seconds", duration)
         mlflow.log_artifact(feature_schema_path, artifact_path="feature_schema")
         mlflow.log_param("n_features", len(feature_schema["columns"]))

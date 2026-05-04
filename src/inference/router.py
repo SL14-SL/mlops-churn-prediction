@@ -44,6 +44,9 @@ def load_registry_model(model_name: str):
     client = MlflowClient()
     mv = client.get_model_version_by_alias(model_name, alias)
     run = client.get_run(mv.run_id)
+    decision_threshold = float(
+        run.data.params.get("decision_threshold", 0.5)
+    )
 
     model_type = (
         run.data.tags.get("model_type")
@@ -58,4 +61,4 @@ def load_registry_model(model_name: str):
         f"model_uri={model_uri} | model_type={model_type} | "
     )
 
-    return model, model_type, alias, model_uri
+    return model, model_type, alias, model_uri, decision_threshold

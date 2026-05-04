@@ -110,16 +110,15 @@ def _build_decision_engine():
 
     return DecisionEngine(decision_config)
 
-
 def predict_and_decide(
     input_df: pd.DataFrame,
     model,
     raw_input_df: pd.DataFrame | None = None,
+    decision_threshold: float = 0.5,
 ) -> list[dict]:
 
     decision_engine = _build_decision_engine()
 
-    # 1. Predict probabilities on model-ready features
     raw_preds = model.predict(input_df)
 
     if isinstance(raw_preds, list) and isinstance(raw_preds[0], dict):
@@ -127,10 +126,8 @@ def predict_and_decide(
     else:
         probs = raw_preds
 
-    probs = np.asarray(probs).reshape(-1)
-    probs = probs.astype(float)
+    probs = np.asarray(probs).reshape(-1).astype(float)
 
-    # 2. Use raw/validated input for business value estimation
     value_df = raw_input_df if raw_input_df is not None else input_df
 
     customer_values = estimate_customer_values(
@@ -138,21 +135,27 @@ def predict_and_decide(
         default_value=decision_engine.config.customer_value,
     )
 
-    # Safety check
     if len(customer_values) != len(probs):
         raise ValueError(
             f"customer_values length ({len(customer_values)}) "
             f"does not match probs length ({len(probs)})"
         )
 
-    # 3. Business decision
     results = decision_engine.decide_batch(
         probs=probs.tolist(),
         customer_values=customer_values,
     )
 
+    # Add classification decision based on tuned threshold.
+    for result, prob in zip(results, probs, strict=True):
+        result["prediction"] = float(prob)
+        result["churn_probability"] = float(prob)
+        result["churn_prediction"] = int(prob >= decision_threshold)
+        result["decision_threshold"] = float(decision_threshold)
+
     logger.info(f"DEBUG probs shape: {np.array(raw_preds).shape}")
     logger.info(f"DEBUG customer_values: {customer_values}")
+    logger.info(f"DEBUG decision_threshold: {decision_threshold}")
 
     return results
 
