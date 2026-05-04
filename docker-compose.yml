@@ -76,6 +76,7 @@ services:
       - ./mlruns:/app/mlruns
       - ./data:/app/data
       - ./models:/app/models
+      - ./scripts:/app/scripts
     networks:
       - mlops-net
     depends_on:
