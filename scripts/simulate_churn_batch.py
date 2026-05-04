@@ -19,8 +19,9 @@ RAW_DATA_PATH = Path(get_path("raw_data"))
 PREDICTIONS_PATH = Path(get_path("predictions"))
 
 SIMULATION_FILE = RAW_DATA_PATH / "simulation_ground_truth.csv"
-BATCH_DIR = RAW_DATA_PATH / "new_batches"
+BATCH_DIR = Path(get_path("monitoring")) / "ground_truth_batches"
 INFERENCE_LOG_FILE = PREDICTIONS_PATH / "inference_log.parquet"
+TRAINING_BATCH_DIR = Path(get_path("raw_data")) / "new_batches"
 
 API_URL = CFG["api"]["url"]
 API_KEY = os.getenv("API_KEY")
@@ -155,6 +156,8 @@ def simulate_labeled_batch(batch_size: int = 50) -> Path:
 
     batch = get_next_batch(df, batch_size=batch_size)
 
+    training_batch = batch.copy()
+
     ground_truth = batch.copy()
     ground_truth = normalize_customer_id_column(ground_truth)
     ground_truth = ground_truth[["customerid", "Churn"]].copy()
@@ -212,6 +215,14 @@ def simulate_labeled_batch(batch_size: int = 50) -> Path:
     print(f"Ground truth batch written: {output_file}")
     print(f"Rows: {len(merged)}")
     print(f"Churn rate: {merged['churn'].mean():.2%}")
+
+    TRAINING_BATCH_DIR.mkdir(parents=True, exist_ok=True)
+
+    training_output_file = TRAINING_BATCH_DIR / f"train_batch_churn_{timestamp}.csv"
+    training_batch.to_csv(training_output_file, index=False)
+
+    remaining = df.iloc[len(batch):].copy()
+    remaining.to_csv(SIMULATION_FILE, index=False)
 
     return output_file
 

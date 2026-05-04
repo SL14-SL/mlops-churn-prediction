@@ -5,49 +5,42 @@ from pathlib import Path
 import pandas as pd
 
 from src.configs.loader import get_path, load_config
+from src.utils.logger import get_logger
+
+logger = get_logger(__name__)
+
+MONITORING_PATH = Path(get_path("monitoring"))
+PERFORMANCE_HISTORY_FILE = MONITORING_PATH / "churn_performance_history.parquet"
 
 
-def new_data_available() -> bool:
-    """
-    Check if new raw batch data is available for processing.
+def load_latest_performance_row() -> pd.Series | None:
+    """Load the latest churn performance monitoring row."""
+    if not PERFORMANCE_HISTORY_FILE.exists():
+        logger.info("No churn performance history found: %s", PERFORMANCE_HISTORY_FILE)
+        return None
 
-    Returns True if at least one new batch file exists.
-    """
-    batch_dir = Path(get_path("raw_data")) / "new_batches"
-    if not batch_dir.exists():
-        return False
-
-    return any(batch_dir.glob("*.csv"))
-
-
-def drift_detected() -> bool:
-    """
-    Check if feature drift has been detected in recent monitoring runs.
-
-    Returns True if any drift flag is present in the drift history.
-    """
-    drift_file = Path(get_path("monitoring")) / "feature_drift_history.parquet"
-
-    if not drift_file.exists():
-        return False
-
-    df = pd.read_parquet(drift_file)
+    df = pd.read_parquet(PERFORMANCE_HISTORY_FILE)
 
     if df.empty:
-        return False
+        logger.info("Churn performance history is empty.")
+        return None
 
-    if "drift_detected" not in df.columns:
-        return False
+    if "timestamp" in df.columns:
+        df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce", utc=True)
+        df = df.sort_values("timestamp")
 
-    latest = df.iloc[-1]
-    return bool(latest["drift_detected"])
+    return df.iloc[-1]
 
 
-def performance_degraded() -> bool:
+def should_retrain() -> bool:
     """
-    Check if churn classification performance dropped below configured thresholds.
+    Decide whether the latest churn monitoring result should trigger retraining.
 
-    Thresholds are loaded from monitoring.yaml.
+    Uses thresholds from configs/monitoring.yaml:
+    - min_f1
+    - min_recall
+    - min_roc_auc
+    - max_brier_score
     """
     cfg = load_config("monitoring.yaml")
     thresholds = cfg.get("performance", {}).get("retrain_thresholds", {})
@@ -57,75 +50,43 @@ def performance_degraded() -> bool:
     min_roc_auc = thresholds.get("min_roc_auc", 0.75)
     max_brier_score = thresholds.get("max_brier_score", 0.22)
 
-    performance_file = Path(get_path("monitoring")) / "churn_performance_history.parquet"
+    latest = load_latest_performance_row()
 
-    if not performance_file.exists():
+    if latest is None:
         return False
 
-    df = pd.read_parquet(performance_file)
+    n_samples = int(latest.get("n_samples", 0) or 0)
 
-    if df.empty:
+    if n_samples < 20:
+        logger.info("Skipping retrain: not enough labeled samples (%s/20).", n_samples)
         return False
 
-    latest = df.sort_values("computed_at").iloc[-1]
+    f1 = latest.get("f1_score")
+    recall = latest.get("recall")
+    roc_auc = latest.get("roc_auc")
+    brier = latest.get("brier_score")
 
-    checks = []
+    if pd.notna(f1) and float(f1) < min_f1:
+        logger.warning("Retrain triggered: F1 %.3f < %.3f", f1, min_f1)
+        return True
 
-    if "f1" in latest and pd.notna(latest["f1"]):
-        checks.append(latest["f1"] < min_f1)
+    if pd.notna(recall) and float(recall) < min_recall:
+        logger.warning("Retrain triggered: Recall %.3f < %.3f", recall, min_recall)
+        return True
 
-    if "recall" in latest and pd.notna(latest["recall"]):
-        checks.append(latest["recall"] < min_recall)
+    if pd.notna(roc_auc) and float(roc_auc) < min_roc_auc:
+        logger.warning("Retrain triggered: ROC AUC %.3f < %.3f", roc_auc, min_roc_auc)
+        return True
 
-    if "roc_auc" in latest and pd.notna(latest["roc_auc"]):
-        checks.append(latest["roc_auc"] < min_roc_auc)
+    if pd.notna(brier) and float(brier) > max_brier_score:
+        logger.warning("Retrain triggered: Brier %.3f > %.3f", brier, max_brier_score)
+        return True
 
-    if "brier_score" in latest and pd.notna(latest["brier_score"]):
-        checks.append(latest["brier_score"] > max_brier_score)
+    retrain_flag = bool(latest.get("retrain_triggered", False))
 
-    return any(checks)
+    if retrain_flag:
+        logger.warning("Retrain triggered by monitoring flag.")
+        return True
 
-
-def business_degraded() -> bool:
-    """
-    Check if expected business profit dropped below the configured threshold.
-
-    Uses the latest churn performance monitoring snapshot.
-    """
-    cfg = load_config("monitoring.yaml")
-    business_cfg = cfg.get("business", {})
-
-    min_expected_profit = business_cfg.get("min_expected_profit", 0.0)
-
-    performance_file = Path(get_path("monitoring")) / "churn_performance_history.parquet"
-
-    if not performance_file.exists():
-        return False
-
-    df = pd.read_parquet(performance_file)
-
-    if df.empty:
-        return False
-
-    latest = df.sort_values("computed_at").iloc[-1]
-
-    profit_col = "business_expected_profit"
-
-    if profit_col not in latest or pd.isna(latest[profit_col]):
-        return False
-
-    return latest[profit_col] < min_expected_profit
-
-
-def should_retrain() -> bool:
-    """
-    Decide whether model retraining should be triggered.
-
-    Combines new data, drift, model performance, and business signals.
-    """
-    return (
-        new_data_available()
-        or drift_detected()
-        or performance_degraded()
-        or business_degraded()
-    )
+    logger.info("No retraining needed. Latest churn metrics are within thresholds.")
+    return False

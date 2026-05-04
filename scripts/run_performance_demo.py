@@ -22,7 +22,7 @@ RAW_DATA_PATH = Path(get_path("raw_data"))
 MONITORING_PATH = Path(get_path("monitoring"))
 
 INFERENCE_LOG_FILE = PREDICTIONS_PATH / "inference_log.parquet"
-BATCH_DIR = RAW_DATA_PATH / "new_batches"
+BATCH_DIR = MONITORING_PATH / "ground_truth_batches"
 CUMULATIVE_GT_FILE = MONITORING_PATH / "cumulative_ground_truth.csv"
 PERFORMANCE_HISTORY_FILE = MONITORING_PATH / "churn_performance_history.parquet"
 

@@ -13,7 +13,8 @@ from sklearn.metrics import (
     precision_score, 
     recall_score, 
     f1_score, 
-    roc_auc_score
+    roc_auc_score,
+    brier_score_loss,
 )
 
 from src.configs.loader import get_path, load_config
@@ -143,12 +144,15 @@ def train(train_file: str | None = None, val_file: str | None = None):
 
         # Metrics Calculation
         preds = model.predict(X_val)
+        y_proba = model.predict_proba(X_val)[:,1]
         acc = accuracy_score(y_val, preds)
         prec = precision_score(y_val, preds)
         rec = recall_score(y_val, preds)
         f1 = f1_score(y_val, preds)
+        roc_auc = roc_auc_score(y_val, y_proba)
+        brier_score = brier_score_loss(y_val, y_proba)
         
-        metrics = {"accuracy": acc, "precision": prec, "recall": rec, "f1_score": f1}
+        metrics = {"accuracy": acc, "precision": prec, "recall": rec, "f1_score": f1, "roc_auc": roc_auc, "brier": brier_score}
         
         # Logging
         mlflow.log_params(model_cfg.get("params", {}))

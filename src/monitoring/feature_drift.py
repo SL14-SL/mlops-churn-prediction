@@ -47,9 +47,10 @@ def load_reference_features() -> pd.DataFrame:
             path,
         )
         return pd.DataFrame()
-    
+
     df = pd.read_parquet(path)
-    return df
+    df.columns = df.columns.str.lower()
+    return df    
 
 
 def load_current_inference_features() -> pd.DataFrame:
@@ -63,6 +64,7 @@ def load_current_inference_features() -> pd.DataFrame:
         return pd.DataFrame()
 
     df = pd.read_parquet(path)
+    df.columns = df.columns.str.lower()
 
     if "timestamp" in df.columns:
         df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
