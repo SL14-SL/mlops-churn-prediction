@@ -16,6 +16,9 @@ from sklearn.metrics import (
 
 from src.configs.loader import get_path, load_config
 from src.utils.logger import get_logger
+from src.monitoring.performance import compute_business_metrics
+from src.monitoring.config import get_business_settings
+
 
 logger = get_logger(__name__)
 
@@ -227,6 +230,21 @@ def compute_churn_metrics(joined: pd.DataFrame, decision_threshold: float) -> di
         "no_action_count": int(joined["action"].eq("no_action").sum()),"retrain_triggered": False,
         "champion_promoted": False,
     }
+    business_cfg = get_business_settings()
+
+    business_metrics = compute_business_metrics(
+        joined,
+        y_true_col="churn",
+        y_proba_col="churn_probability",
+        action_col="action",
+        customer_value=business_cfg["customer_value"],
+        cost_contact=business_cfg["cost_contact"],
+        cost_discount=business_cfg["cost_discount"],
+        contact_uplift=business_cfg["contact_uplift"],
+        discount_uplift=business_cfg["discount_uplift"],
+    )
+
+    metrics.update({f"business_{k}": v for k, v in business_metrics.items()})
 
     if y_true.nunique() > 1:
         metrics["roc_auc"] = float(roc_auc_score(y_true, y_prob))
