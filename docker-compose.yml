@@ -58,6 +58,7 @@ services:
     user: "${UID}:${GID}"
     ports:
       - "8000:8080"
+      - "8501:8501"
     environment:
       PYTHONPATH: /app
       MLFLOW_TRACKING_URI: http://mlflow:5000
