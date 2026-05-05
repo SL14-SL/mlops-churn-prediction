@@ -218,18 +218,10 @@ def compute_churn_metrics(joined: pd.DataFrame, decision_threshold: float) -> di
         "precision": float(precision_score(y_true, y_pred, zero_division=0)),
         "brier_score": float(brier_score_loss(y_true, y_prob)),
         "expected_profit": float(joined["expected_profit"].sum()),
-        "actions_count": int(joined["is_actioned"].sum()),
-        "total_expected_value": float(joined["expected_value"].sum()),
-        "expected_value_per_action": float(
-            joined.loc[joined["is_actioned"], "expected_value"].mean()
-        )
-        if joined["is_actioned"].any()
-        else 0.0,
-        "offer_discount_count": int(joined["action"].eq("offer_discount").sum()),
-        "send_email_count": int(joined["action"].eq("send_email").sum()),
-        "no_action_count": int(joined["action"].eq("no_action").sum()),"retrain_triggered": False,
+        "retrain_triggered": False,
         "champion_promoted": False,
     }
+
     business_cfg = get_business_settings()
 
     business_metrics = compute_business_metrics(
