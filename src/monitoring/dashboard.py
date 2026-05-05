@@ -380,15 +380,13 @@ with tab1:
             if "expected_profit" in prediction_df.columns
             else None
         )
+        actions_rate = (prediction_df["action"] != "no_action").mean()
 
         k1, k2, k3, k4 = st.columns(4)
         k1.metric("Predictions", f"{total_predictions:,}")
         k2.metric("Avg. Churn Risk", f"{avg_churn_probability:.2%}")
         k3.metric("High-Risk Share", f"{high_risk_share:.2%}")
-        k4.metric(
-            "Expected Profit",
-            f"{expected_profit:,.2f} €" if expected_profit is not None else "n/a",
-        )
+        k4.metric("Action Rate",f"{actions_rate:,.2%}")
 
         if "action" in prediction_df.columns:
             actioned = prediction_df["action"].ne("no_action")
@@ -411,7 +409,7 @@ with tab1:
                 f"{int(prediction_df['action'].eq('offer_discount').sum()):,}",
             )
             b4.metric(
-                "EV / Action",
+                "Expected Value / Action",
                 f"{expected_value_per_action:,.2f} €"
                 if expected_value_per_action is not None
                 else "n/a",
@@ -433,14 +431,15 @@ with tab1:
             )
 
             r3.metric(
-                "Realized Profit / Action",
+                "Profit / Action",
                 f"{latest_perf.get('business_realized_profit_per_action', 0.0):,.2f} €",
             )
 
             r4.metric(
-                "Realized Saved Value",
+                "Saved Value",
                 f"{latest_perf.get('business_realized_saved_value', 0.0):,.2f} €",
             )
+            st.caption("All business metrics are evaluated on labeled data only.")
 
         st.divider()
 
@@ -462,7 +461,7 @@ with tab1:
                 ]
 
                 st.caption(
-                    "Best realized profit at "
+                    "Best realized profit (simulated) at "
                     f"min_expected_profit={best_realized['min_expected_profit']:.2f} "
                     f"with {best_realized['realized_profit']:,.2f} €."
                 )
@@ -485,7 +484,7 @@ with tab1:
                 ]
 
                 st.caption(
-                    "Best scenario: "
+                    "Best scenario (simulated): "
                     f"discount_uplift={best_uplift['discount_uplift']:.2f}, "
                     f"contact_uplift={best_uplift['contact_uplift']:.2f}, "
                     f"profit={best_uplift['realized_profit']:,.2f} €."
