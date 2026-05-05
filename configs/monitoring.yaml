@@ -31,7 +31,6 @@ business:
   enabled: true
 
   min_expected_profit: 0.0
-
   customer_value: 100
   cost_discount: 10
   cost_contact: 2

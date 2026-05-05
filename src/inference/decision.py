@@ -53,7 +53,7 @@ class DecisionEngine:
         best_action = max(actions, key=actions.get)
         best_value = actions[best_action]
 
-        if best_value >= 0:
+        if best_value <= 0:
             best_action = "no_action"
             best_value = 0.0
 

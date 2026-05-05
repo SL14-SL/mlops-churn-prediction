@@ -202,6 +202,11 @@ def compute_business_metrics(
     if clean_df.empty:
         raise ValueError("No rows available after dropping missing values.")
 
+    if "customer_value" in clean_df.columns:
+        customer_values = clean_df["customer_value"].astype(float)
+    else:
+        customer_values = customer_value
+
     y_true = _normalize_binary_target(clean_df[y_true_col])
     y_proba = clean_df[y_proba_col].astype(float).clip(0.0, 1.0)
     actions = clean_df[action_col].astype(str)
@@ -230,9 +235,9 @@ def compute_business_metrics(
         default=0.0,
     )
 
-    expected_saved_value = y_proba * customer_value * uplifts
+    expected_saved_value = y_proba * customer_values * uplifts
     expected_profit = expected_saved_value - costs
-    actual_saved_value = y_true * customer_value * uplifts
+    actual_saved_value = y_true * customer_values * uplifts
     realized_profit = actual_saved_value - costs 
     actual_intervened_churners = ((actions != "no_action") & (y_true == 1)).sum()
 
