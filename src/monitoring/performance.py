@@ -185,8 +185,8 @@ def compute_business_metrics(
 
     action values expected:
     - no_action
-    - contact
-    - discount
+    - send_email
+    - offer_discount
     """
 
     required = [y_true_col, y_proba_col, action_col]
@@ -206,8 +206,8 @@ def compute_business_metrics(
 
     costs = np.select(
         [
-            actions.eq("contact"),
-            actions.eq("discount"),
+            actions.eq("send_email"),
+            actions.eq("offer_discount"),
         ],
         [
             cost_contact,
@@ -218,8 +218,8 @@ def compute_business_metrics(
 
     uplifts = np.select(
         [
-            actions.eq("contact"),
-            actions.eq("discount"),
+            actions.eq("send_email"),
+            actions.eq("offer_discount"),
         ],
         [
             contact_uplift,
@@ -236,8 +236,8 @@ def compute_business_metrics(
     return {
         "n_samples": int(len(clean_df)),
         "intervention_rate": float((actions != "no_action").mean()),
-        "contact_rate": float(actions.eq("contact").mean()),
-        "discount_rate": float(actions.eq("discount").mean()),
+        "send_email_rate": float(actions.eq("send_email").mean()),
+        "offer_discount_rate": float(actions.eq("offer_discount").mean()),
         "total_intervention_cost": float(costs.sum()),
         "expected_saved_value": float(expected_saved_value.sum()),
         "expected_profit": float(expected_profit.sum()),
