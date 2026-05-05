@@ -18,6 +18,8 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 
+from src.monitoring.config import get_business_settings
+
 
 # -------------------------------------------------
 # I/O Helpers
@@ -286,11 +288,18 @@ def evaluate_churn_batch(
     )
 
     if action_col and action_col in df.columns:
+        business_cfg = get_business_settings()
+
         business_metrics = compute_business_metrics(
             df,
             y_true_col=y_true_col,
             y_proba_col=y_proba_col,
             action_col=action_col,
+            customer_value=business_cfg["customer_value"],
+            cost_contact=business_cfg["cost_contact"],
+            cost_discount=business_cfg["cost_discount"],
+            contact_uplift=business_cfg["contact_uplift"],
+            discount_uplift=business_cfg["discount_uplift"],
         )
         metrics.update({f"business_{k}": v for k, v in business_metrics.items()})
 

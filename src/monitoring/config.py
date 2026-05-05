@@ -38,3 +38,17 @@ def get_serving_settings() -> dict:
             ["/metrics", "/monitoring/summary", "/docs", "/openapi.json", "/redoc"],
         ),
     }
+
+def get_business_settings() -> dict:
+    cfg = get_monitoring_config().get("business", {})
+    return {
+        "enabled": cfg.get("enabled", True),
+        "min_expected_profit": cfg.get("min_expected_profit", 0.0),
+        "customer_value": cfg.get("customer_value", 100.0),
+        "cost_contact": cfg.get("cost_contact", 2.0),
+        "cost_discount": cfg.get("cost_discount", 10.0),
+        "contact_uplift": cfg.get("contact_uplift", 0.1),
+        "discount_uplift": cfg.get("discount_uplift", 0.3),
+        "max_discount_budget": cfg.get("max_discount_budget"),
+        "max_discount_rate": cfg.get("max_discount_rate"),
+    }
