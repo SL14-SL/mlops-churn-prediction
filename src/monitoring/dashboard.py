@@ -28,6 +28,10 @@ CUMULATIVE_GT_FILE = Path(PROJECT_ROOT) / "data" / "monitoring" / "cumulative_gr
 PERFORMANCE_HISTORY_FILE = (
     Path(PROJECT_ROOT) / "data" / "monitoring" / "churn_performance_history.parquet"
 )
+PROFIT_CURVE_FILE = Path(PROJECT_ROOT) / "data" / "monitoring" / "profit_curve.parquet"
+UPLIFT_SENSITIVITY_FILE = (
+    Path(PROJECT_ROOT) / "data" / "monitoring" / "uplift_sensitivity.csv"
+)
 
 
 def normalize_customer_id_column(df: pd.DataFrame) -> pd.DataFrame:
@@ -91,6 +95,21 @@ def load_performance_history() -> pd.DataFrame | None:
             df[col] = pd.to_datetime(df[col], errors="coerce", utc=True)
 
     return df
+
+def load_profit_curve() -> pd.DataFrame | None:
+    """Load offline profit curve simulation."""
+    if not PROFIT_CURVE_FILE.exists():
+        return None
+
+    return pd.read_parquet(PROFIT_CURVE_FILE)
+
+
+def load_uplift_sensitivity() -> pd.DataFrame | None:
+    """Load uplift sensitivity analysis."""
+    if not UPLIFT_SENSITIVITY_FILE.exists():
+        return None
+
+    return pd.read_csv(UPLIFT_SENSITIVITY_FILE)
 
 
 def attach_ground_truth(
@@ -208,6 +227,63 @@ def build_action_chart(df: pd.DataFrame) -> go.Figure:
 
     return fig
 
+def build_profit_curve_chart(df: pd.DataFrame) -> go.Figure:
+    """Build expected vs realized profit curve."""
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Scatter(
+            x=df["min_expected_profit"],
+            y=df["expected_profit"],
+            mode="lines+markers",
+            name="Expected Profit",
+        )
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=df["min_expected_profit"],
+            y=df["realized_profit"],
+            mode="lines+markers",
+            name="Realized Profit",
+        )
+    )
+
+    fig.update_layout(
+        height=450,
+        template="plotly_dark",
+        hovermode="x unified",
+        xaxis_title="Minimum Expected Profit",
+        yaxis_title="Profit (€)",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+
+    return fig
+
+
+def build_uplift_sensitivity_heatmap(df: pd.DataFrame) -> go.Figure:
+    """Build heatmap for realized profit across uplift assumptions."""
+    pivot = df.pivot(
+        index="contact_uplift",
+        columns="discount_uplift",
+        values="realized_profit",
+    )
+
+    fig = px.imshow(
+        pivot,
+        text_auto=".0f",
+        aspect="auto",
+        title="Realized Profit by Uplift Assumptions",
+    )
+
+    fig.update_layout(
+        height=450,
+        template="plotly_dark",
+        xaxis_title="Discount Uplift",
+        yaxis_title="Contact Uplift",
+    )
+
+    return fig
 
 def build_performance_history_chart(df: pd.DataFrame) -> go.Figure:
     """Build model performance trend chart."""
@@ -277,6 +353,8 @@ prediction_df = load_prediction_log()
 ground_truth_df = load_ground_truth()
 prediction_df = attach_ground_truth(prediction_df, ground_truth_df)
 performance_history_df = load_performance_history()
+profit_curve_df = load_profit_curve()
+uplift_sensitivity_df = load_uplift_sensitivity()
 
 
 tab1, tab2 = st.tabs(["Performance", "Costs"])
@@ -311,7 +389,7 @@ with tab1:
             "Expected Profit",
             f"{expected_profit:,.2f} €" if expected_profit is not None else "n/a",
         )
-        
+
         if "action" in prediction_df.columns:
             actioned = prediction_df["action"].ne("no_action")
             actions_count = int(actioned.sum())
@@ -338,6 +416,84 @@ with tab1:
                 if expected_value_per_action is not None
                 else "n/a",
             )
+
+        if performance_history_df is not None and not performance_history_df.empty:
+            latest_perf = performance_history_df.iloc[-1]
+
+            r1, r2, r3, r4 = st.columns(4)
+
+            r1.metric(
+                "Expected Profit",
+                f"{latest_perf.get('business_expected_profit', 0.0):,.2f} €",
+            )
+
+            r2.metric(
+                "Realized Profit",
+                f"{latest_perf.get('business_realized_profit', 0.0):,.2f} €",
+            )
+
+            r3.metric(
+                "Realized Profit / Action",
+                f"{latest_perf.get('business_realized_profit_per_action', 0.0):,.2f} €",
+            )
+
+            r4.metric(
+                "Realized Saved Value",
+                f"{latest_perf.get('business_realized_saved_value', 0.0):,.2f} €",
+            )
+
+        st.divider()
+
+        st.subheader("💼 Business Policy Analysis")
+
+        policy_left, policy_right = st.columns(2)
+
+        with policy_left:
+            st.markdown("#### Profit Curve")
+
+            if profit_curve_df is not None and not profit_curve_df.empty:
+                st.plotly_chart(
+                    build_profit_curve_chart(profit_curve_df),
+                    use_container_width=True,
+                )
+
+                best_realized = profit_curve_df.loc[
+                    profit_curve_df["realized_profit"].idxmax()
+                ]
+
+                st.caption(
+                    "Best realized profit at "
+                    f"min_expected_profit={best_realized['min_expected_profit']:.2f} "
+                    f"with {best_realized['realized_profit']:,.2f} €."
+                )
+            else:
+                st.info(
+                    "No profit curve found yet. Run `uv run --no-sync python scripts/profit_curve.py`."
+                )
+
+        with policy_right:
+            st.markdown("#### Uplift Sensitivity")
+
+            if uplift_sensitivity_df is not None and not uplift_sensitivity_df.empty:
+                st.plotly_chart(
+                    build_uplift_sensitivity_heatmap(uplift_sensitivity_df),
+                    use_container_width=True,
+                )
+
+                best_uplift = uplift_sensitivity_df.loc[
+                    uplift_sensitivity_df["realized_profit"].idxmax()
+                ]
+
+                st.caption(
+                    "Best scenario: "
+                    f"discount_uplift={best_uplift['discount_uplift']:.2f}, "
+                    f"contact_uplift={best_uplift['contact_uplift']:.2f}, "
+                    f"profit={best_uplift['realized_profit']:,.2f} €."
+                )
+            else:
+                st.info(
+                    "No uplift sensitivity file found yet. Run `uv run --no-sync python scripts/uplift_sensitivity.py`."
+                )
 
         st.divider()
 
