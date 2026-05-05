@@ -311,6 +311,33 @@ with tab1:
             "Expected Profit",
             f"{expected_profit:,.2f} €" if expected_profit is not None else "n/a",
         )
+        
+        if "action" in prediction_df.columns:
+            actioned = prediction_df["action"].ne("no_action")
+            actions_count = int(actioned.sum())
+
+            expected_value_per_action = (
+                prediction_df.loc[actioned, "expected_profit"].mean()
+                if "expected_profit" in prediction_df.columns and actions_count > 0
+                else None
+            )
+
+            b1, b2, b3, b4 = st.columns(4)
+            b1.metric("Actions Count", f"{actions_count:,}")
+            b2.metric(
+                "Send Email",
+                f"{int(prediction_df['action'].eq('send_email').sum()):,}",
+            )
+            b3.metric(
+                "Offer Discount",
+                f"{int(prediction_df['action'].eq('offer_discount').sum()):,}",
+            )
+            b4.metric(
+                "EV / Action",
+                f"{expected_value_per_action:,.2f} €"
+                if expected_value_per_action is not None
+                else "n/a",
+            )
 
         st.divider()
 
