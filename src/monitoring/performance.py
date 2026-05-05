@@ -232,7 +232,8 @@ def compute_business_metrics(
 
     expected_saved_value = y_proba * customer_value * uplifts
     expected_profit = expected_saved_value - costs
-
+    actual_saved_value = y_true * customer_value * uplifts
+    realized_profit = actual_saved_value - costs 
     actual_intervened_churners = ((actions != "no_action") & (y_true == 1)).sum()
 
     return {
@@ -245,6 +246,14 @@ def compute_business_metrics(
         "expected_profit": float(expected_profit.sum()),
         "avg_expected_profit_per_customer": float(expected_profit.mean()),
         "actual_intervened_churners": int(actual_intervened_churners),
+        "realized_saved_value": float(actual_saved_value.sum()),
+        "realized_profit": float(realized_profit.sum()),
+        "avg_realized_profit_per_customer": float(realized_profit.mean()),
+        "realized_profit_per_action": float(
+            realized_profit[actions != "no_action"].mean()
+        )
+        if (actions != "no_action").any()
+        else 0.0,
     }
 
 
