@@ -1,100 +1,78 @@
 import pandas as pd
-import pytest
 
 from src.inference.pipeline import (
     validate_prediction_input,
     align_features_for_model,
-    apply_business_rules,
 )
 
 
-def test_validate_prediction_input(sample_prediction_df):
+def test_validate_prediction_input_normalizes_churn_columns(sample_prediction_df):
     result = validate_prediction_input(sample_prediction_df)
 
-    assert "Store" in result.columns
-    assert result["Store"].dtype == int
-
-def test_validate_prediction_input_rejects_target_column():
-    df = pd.DataFrame([{
-        "Store": 1,
-        "Date": "2026-03-24",
-        "Open": 1,
-        "Promo": 0,
-        "StateHoliday": "0",
-        "SchoolHoliday": 0,
-        "Sales": 1234,
-    }])
-
-    with pytest.raises(ValueError, match="must not contain target column"):
-        validate_prediction_input(df)
-
-def test_validate_prediction_input_requires_store():
-    df = pd.DataFrame([{
-        "Date": "2026-03-24",
-        "Open": 1,
-        "Promo": 0,
-    }])
-
-    with pytest.raises(Exception):
-        validate_prediction_input(df)
+    assert "customerid" in result.columns
+    assert "tenure" in result.columns
+    assert "monthlycharges" in result.columns
+    assert "totalcharges" in result.columns
 
 
-def test_validate_prediction_input_rejects_invalid_open_flag():
-    df = pd.DataFrame([{
-        "Store": 1,
-        "Date": "2026-03-24",
-        "Open": 2,
-        "Promo": 0,
-        "StateHoliday": "0",
-        "SchoolHoliday": 0,
-    }])
+def test_validate_prediction_input_preserves_row_count(sample_prediction_df):
+    result = validate_prediction_input(sample_prediction_df)
 
-    with pytest.raises(Exception):
-        validate_prediction_input(df)
+    assert len(result) == len(sample_prediction_df)
 
 
-def test_align_features_for_xgboost(mock_xgb_model):
-    import pandas as pd
+def test_validate_prediction_input_normalizes_target_column_name(sample_prediction_df):
+    df = sample_prediction_df.copy()
+    df["Churn"] = "Yes"
 
+    result = validate_prediction_input(df)
+
+    assert "churn" in result.columns
+
+
+def test_align_features_for_churn_xgboost(mock_xgb_model):
     processed_df = pd.DataFrame(
         [
             {
-                "Store": 1,
-                "DayOfWeek": 5,
-                "Customers": 500,
-                "Open": 1,
-                "Promo": 1,
-                "StateHoliday": "0",
-                "SchoolHoliday": 0,
-                "StoreType": "a",
-                "Assortment": "a",
-                "CompetitionDistance": 500.0,
-                "Promo2": 1,
-                "WeekOfYear": 10,
-                "day": 6,
-                "month": 3,
-                "year": 2026,
-                "is_month_start": 0,
-                "is_month_end": 0,
-                "sales_lag_1": 1600.0,
-                "sales_lag_7": 1000.0,
-                "sales_rolling_mean_7": 1300.0,
+                "tenure": 12,
+                "monthlycharges": 70.35,
+                "totalcharges": 845.50,
+                "seniorcitizen": 0,
+                "gender_Male": False,
+                "partner_Yes": True,
                 "extra_column": 999,
             }
         ]
     )
 
-    result = align_features_for_model(processed_df, mock_xgb_model, "xgboost")
+    result = align_features_for_model(
+        processed_df=processed_df,
+        model=mock_xgb_model,
+        model_type="xgboost",
+        feature_schema=None,
+    )
 
     assert list(result.columns) == mock_xgb_model.get_booster.return_value.feature_names
     assert "extra_column" not in result.columns
 
 
-def test_apply_business_rules_closed_store():
-    result = apply_business_rules(1234.5, is_open=0)
-    assert result == 0.0
+def test_align_features_adds_missing_churn_features(mock_xgb_model):
+    processed_df = pd.DataFrame(
+        [
+            {
+                "tenure": 12,
+            }
+        ]
+    )
 
+    result = align_features_for_model(
+        processed_df=processed_df,
+        model=mock_xgb_model,
+        model_type="xgboost",
+        feature_schema=None,
+    )
 
-def test_apply_business_rules_open_store():
-    result = apply_business_rules(1234.5, is_open=1)
-    assert result == 1234.5
+    assert list(result.columns) == mock_xgb_model.get_booster.return_value.feature_names
+    assert result["tenure"].iloc[0] == 12
+    assert result["monthlycharges"].iloc[0] == 0
+    assert result["totalcharges"].iloc[0] == 0

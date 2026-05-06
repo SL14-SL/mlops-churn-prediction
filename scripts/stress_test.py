@@ -127,7 +127,7 @@ def run_stress_test(
         if response.status_code == 200:
             body = response.json()
             metadata = body.get('metadata', {})
-            print(f"✅ Batch request successful.")
+            print("✅ Batch request successful.")
             print(f"   Rows processed: {metadata.get('rows')}")
             print(f"   Model used:     {metadata.get('model_name')}")
             print(f"   Total time:     {metadata.get('timing_ms', {}).get('total')}ms")

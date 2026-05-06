@@ -1,66 +1,58 @@
 import pandas as pd
 
 from src.data.features.common import (
-    add_basic_calendar_features,
     cast_object_columns_to_category,
     drop_columns_if_present,
-    ensure_datetime_column,
 )
 
 
-def test_ensure_datetime_column_parses_date():
-    df = pd.DataFrame({"Date": ["2026-03-06"]})
-
-    result = ensure_datetime_column(df, "Date")
-
-    assert str(result["Date"].dtype).startswith("datetime64")
-
-
-def test_add_basic_calendar_features():
-    df = pd.DataFrame({"Date": ["2026-03-06"]})
-
-    result = add_basic_calendar_features(df, date_column="Date")
-
-    assert "DayOfWeek" in result.columns
-    assert "WeekOfYear" in result.columns
-    assert "day" in result.columns
-    assert "month" in result.columns
-    assert "year" in result.columns
-    assert "is_month_start" in result.columns
-    assert "is_month_end" in result.columns
-
-    assert result.loc[0, "day"] == 6
-    assert result.loc[0, "month"] == 3
-    assert result.loc[0, "year"] == 2026
-
-
-def test_cast_object_columns_to_category():
+def test_cast_object_columns_to_category_converts_churn_categoricals():
     df = pd.DataFrame(
         {
-            "StateHoliday": ["0"],
-            "StoreType": ["a"],
-            "Customers": [100],
+            "gender": ["Female", "Male"],
+            "contract": ["Month-to-month", "Two year"],
+            "paymentmethod": ["Electronic check", "Mailed check"],
+            "tenure": [12, 24],
+            "monthlycharges": [70.35, 45.00],
         }
     )
 
     result = cast_object_columns_to_category(df)
 
-    assert str(result["StateHoliday"].dtype) == "category"
-    assert str(result["StoreType"].dtype) == "category"
-    assert result["Customers"].dtype == df["Customers"].dtype
+    assert str(result["gender"].dtype) == "category"
+    assert str(result["contract"].dtype) == "category"
+    assert str(result["paymentmethod"].dtype) == "category"
+    assert result["tenure"].dtype == df["tenure"].dtype
+    assert result["monthlycharges"].dtype == df["monthlycharges"].dtype
 
 
-def test_drop_columns_if_present():
+def test_drop_columns_if_present_drops_existing_columns_only():
     df = pd.DataFrame(
         {
-            "A": [1],
-            "B": [2],
-            "C": [3],
+            "customerid": ["1234-ABCDE"],
+            "tenure": [12],
+            "monthlycharges": [70.35],
+            "churn": [1],
         }
     )
 
-    result = drop_columns_if_present(df, ["B", "X"])
+    result = drop_columns_if_present(df, ["customerid", "missing_column"])
 
-    assert "B" not in result.columns
-    assert "A" in result.columns
-    assert "C" in result.columns
+    assert "customerid" not in result.columns
+    assert "tenure" in result.columns
+    assert "monthlycharges" in result.columns
+    assert "churn" in result.columns
+
+
+def test_drop_columns_if_present_does_not_mutate_input():
+    df = pd.DataFrame(
+        {
+            "customerid": ["1234-ABCDE"],
+            "tenure": [12],
+        }
+    )
+
+    result = drop_columns_if_present(df, ["customerid"])
+
+    assert "customerid" in df.columns
+    assert "customerid" not in result.columns

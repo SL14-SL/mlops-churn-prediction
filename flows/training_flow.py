@@ -1,6 +1,5 @@
 # --- STANDARD LIBRARY IMPORTS ---
 import sys
-import subprocess
 import time
 import shutil
 import logging
@@ -11,7 +10,6 @@ from datetime import datetime
 
 # --- THIRD PARTY IMPORTS ---
 import requests
-import pandas as pd
 import mlflow
 
 from google.cloud import storage

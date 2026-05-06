@@ -1,7 +1,6 @@
 import os
 import mlflow
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import confusion_matrix, f1_score
@@ -96,7 +95,7 @@ def _generate_and_log_plots(model, X_val, y_val, run_id, threshold: float = 0.5)
 def evaluate_model(model_alias: str = "champion") -> float:
     """
     Evaluates a specific model from the registry on the current validation set.
-    Returns the F1-Score (instead of RMSE).
+    Returns the F1-Score.
     """
     X_val, y_val = _load_and_prep_val_data()
 

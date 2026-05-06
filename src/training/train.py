@@ -18,12 +18,10 @@ from sklearn.metrics import (
 )
 
 from src.configs.loader import get_path, load_config
-from src.constants import PROJECT_ROOT
 from src.training.model_factory import build_model, fit_model, log_model_by_type
 from src.training.explainability import log_feature_importance, log_shap_summary
 from src.utils.logger import get_logger
 
-from sklearn.metrics import precision_recall_curve
 
 
 logger = get_logger(__name__)

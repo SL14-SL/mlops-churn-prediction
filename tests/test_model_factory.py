@@ -1,19 +1,19 @@
+from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 import pytest
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.linear_model import LinearRegression
 
 from src.training.model_factory import build_model
 
 
-def test_build_xgboost_model():
+def test_build_gradient_boosting_model():
     cfg = {
-        "type": "xgboost",
+        "type": "gradient_boosting",
         "params": {"n_estimators": 10},
     }
 
     model = build_model(cfg)
 
-    assert model is not None
+    assert isinstance(model, GradientBoostingClassifier)
+    assert model.n_estimators == 10
 
 
 def test_build_random_forest_model():
@@ -24,25 +24,15 @@ def test_build_random_forest_model():
 
     model = build_model(cfg)
 
-    assert isinstance(model, RandomForestRegressor)
+    assert isinstance(model, RandomForestClassifier)
+    assert model.n_estimators == 10
 
 
-def test_build_linear_regression_model():
+def test_build_unsupported_model_raises():
     cfg = {
         "type": "linear_regression",
         "params": {},
     }
 
-    model = build_model(cfg)
-
-    assert isinstance(model, LinearRegression)
-
-
-def test_invalid_model_type():
-    cfg = {
-        "type": "invalid_model",
-        "params": {},
-    }
-
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Unsupported model type"):
         build_model(cfg)

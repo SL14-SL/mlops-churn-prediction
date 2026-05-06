@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-import mlflow
 
 from src.utils.logger import get_logger
 from src.inference.decision import DecisionConfig, DecisionEngine

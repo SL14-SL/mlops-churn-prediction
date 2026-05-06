@@ -1,6 +1,4 @@
 import pandas as pd
-import pandera.pandas as pa
-from pandera.typing import DataFrame
 from src.data.validation.churn_schema import ChurnSchema
 from src.utils.logger import get_logger
 

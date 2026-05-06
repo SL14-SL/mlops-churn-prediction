@@ -9,7 +9,6 @@ from src.data.versioning import (
     snapshot_current_datasets,
 )
 
-
 def test_snapshot_current_datasets_creates_manifest_and_files(tmp_path, monkeypatch):
     version_id = "ds_test_001"
 
@@ -25,17 +24,55 @@ def test_snapshot_current_datasets_creates_manifest_and_files(tmp_path, monkeypa
     splits_dir.mkdir(parents=True, exist_ok=True)
     versioning_dir.mkdir(parents=True, exist_ok=True)
 
-    pd.DataFrame({"Store": [1]}).to_csv(raw_dir / "store.csv", index=False)
-    pd.DataFrame({"Store": [1], "Sales": [100]}).to_csv(raw_dir / "train.csv", index=False)
-    pd.DataFrame({"Store": [1]}).to_csv(raw_dir / "test.csv", index=False)
+    pd.DataFrame(
+        {
+            "customerID": ["1234-ABCDE"],
+            "gender": ["Female"],
+            "tenure": [12],
+            "MonthlyCharges": [70.35],
+            "TotalCharges": ["845.50"],
+            "Churn": ["Yes"],
+        }
+    ).to_csv(raw_dir / "Telco-Customer-Churn.csv", index=False)
 
-    pd.DataFrame({"Store": [1], "Sales": [100]}).to_parquet(validated_dir / "train.parquet", index=False)
-    pd.DataFrame({"Store": [1]}).to_parquet(validated_dir / "store.parquet", index=False)
+    pd.DataFrame(
+        {
+            "customerid": ["1234-ABCDE"],
+            "gender": ["Female"],
+            "tenure": [12],
+            "monthlycharges": [70.35],
+            "totalcharges": [845.50],
+            "churn": [1],
+        }
+    ).to_parquet(validated_dir / "train.parquet", index=False)
 
-    pd.DataFrame({"Store": [1], "feature_x": [0.5]}).to_parquet(features_dir / "features.parquet", index=False)
+    pd.DataFrame(
+        {
+            "tenure": [12],
+            "monthlycharges": [70.35],
+            "totalcharges": [845.50],
+            "gender_Male": [False],
+            "churn": [1],
+        }
+    ).to_parquet(features_dir / "features.parquet", index=False)
 
-    pd.DataFrame({"Store": [1], "Sales": [100]}).to_parquet(splits_dir / "train.parquet", index=False)
-    pd.DataFrame({"Store": [1], "Sales": [120]}).to_parquet(splits_dir / "val.parquet", index=False)
+    pd.DataFrame(
+        {
+            "tenure": [12],
+            "monthlycharges": [70.35],
+            "totalcharges": [845.50],
+            "churn": [1],
+        }
+    ).to_parquet(splits_dir / "train.parquet", index=False)
+
+    pd.DataFrame(
+        {
+            "tenure": [3],
+            "monthlycharges": [45.0],
+            "totalcharges": [135.0],
+            "churn": [0],
+        }
+    ).to_parquet(splits_dir / "val.parquet", index=False)
 
     def fake_get_path(name: str) -> str:
         mapping = {
@@ -58,14 +95,14 @@ def test_snapshot_current_datasets_creates_manifest_and_files(tmp_path, monkeypa
     assert manifest["dataset_version"] == version_id
     assert manifest["git_commit"] == "abc123"
     assert manifest["config_name"] == "dev.yaml"
-    assert (snapshot_root / "raw" / "store.csv").exists()
-    assert (snapshot_root / "raw" / "train.csv").exists()
-    assert (snapshot_root / "raw" / "test.csv").exists()
-    assert (snapshot_root / "validated" / "train.parquet").exists()
-    assert (snapshot_root / "validated" / "store.parquet").exists()
-    assert (snapshot_root / "features" / "features.parquet").exists()
-    assert (snapshot_root / "splits" / "train.parquet").exists()
-    assert (snapshot_root / "splits" / "val.parquet").exists()
+    assert "snapshots" in manifest
+    assert "features" in manifest["snapshots"]
+    assert "split_train" in manifest["snapshots"]
+    assert "split_val" in manifest["snapshots"]
+
+    for snapshot_path in manifest["snapshots"].values():
+        assert snapshot_path
+        
     assert (snapshot_root / "manifest.json").exists()
     assert (versioning_dir / "latest_manifest.json").exists()
 

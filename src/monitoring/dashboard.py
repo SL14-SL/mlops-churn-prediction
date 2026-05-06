@@ -307,7 +307,7 @@ def build_performance_history_chart(df: pd.DataFrame) -> go.Figure:
             )
 
     if "retrain_triggered" in df.columns and "f1_score" in df.columns:
-        retrain_df = df[df["retrain_triggered"] == True]
+        retrain_df = df[df["retrain_triggered"]]
         if not retrain_df.empty:
             retrain_x = retrain_df["timestamp"] if "timestamp" in retrain_df.columns else retrain_df.index
             fig.add_trace(
@@ -321,7 +321,7 @@ def build_performance_history_chart(df: pd.DataFrame) -> go.Figure:
             )
 
     if "champion_promoted" in df.columns and "f1_score" in df.columns:
-        promoted_df = df[df["champion_promoted"] == True]
+        promoted_df = df[df["champion_promoted"]]
         if not promoted_df.empty:
             promoted_x = (
                 promoted_df["timestamp"] if "timestamp" in promoted_df.columns else promoted_df.index

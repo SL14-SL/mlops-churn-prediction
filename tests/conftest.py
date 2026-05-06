@@ -1,5 +1,9 @@
+# ruff: noqa: E402
 import os
 
+TEST_API_KEY = "test-secret-key"
+
+os.environ["API_KEY"] = TEST_API_KEY
 os.environ["PREFECT_API_MODE"] = "ephemeral"
 os.environ["PREFECT_API_URL"] = ""
 os.environ["PREFECT_SERVER_ALLOW_EPHEMERAL_MODE"] = "true"
@@ -11,95 +15,77 @@ from unittest.mock import MagicMock
 
 from src.api.app import app
 
-
-TEST_API_KEY = "test-secret-key"
-
-
 @pytest.fixture
-def sample_prediction_payload():
+def sample_churn_customer():
     return {
-        "inputs": [
-            {
-                "Store": 1,
-                "DayOfWeek": 5,
-                "Date": "2026-03-06",
-                "Customers": 500,
-                "Open": 1,
-                "Promo": 1,
-                "StateHoliday": "0",
-                "SchoolHoliday": 0,
-            }
-        ]
+        "customerID": "1234-ABCDE",
+        "gender": "Female",
+        "SeniorCitizen": 0,
+        "Partner": "Yes",
+        "Dependents": "No",
+        "tenure": 12,
+        "PhoneService": "Yes",
+        "MultipleLines": "No",
+        "InternetService": "Fiber optic",
+        "OnlineSecurity": "No",
+        "OnlineBackup": "Yes",
+        "DeviceProtection": "No",
+        "TechSupport": "No",
+        "StreamingTV": "Yes",
+        "StreamingMovies": "No",
+        "Contract": "Month-to-month",
+        "PaperlessBilling": "Yes",
+        "PaymentMethod": "Electronic check",
+        "MonthlyCharges": 70.35,
+        "TotalCharges": "845.50",
     }
 
 
 @pytest.fixture
-def sample_prediction_df():
-    return pd.DataFrame(
-        [
-            {
-                "Store": 1,
-                "DayOfWeek": 5,
-                "Date": "2026-03-06",
-                "Customers": 500,
-                "Open": 1,
-                "Promo": 1,
-                "StateHoliday": "0",
-                "SchoolHoliday": 0,
-            }
-        ]
-    )
-
-@pytest.fixture
-def sample_store_metadata():
-    return pd.DataFrame(
-        [
-            {
-                "Store": 1,
-                "StoreType": "a",
-                "Assortment": "a",
-                "CompetitionDistance": 500.0,
-                "Promo2": 1,
-            }
-        ]
-    )
-
-
-@pytest.fixture
-def sample_store_state():
+def sample_prediction_payload(sample_churn_customer):
     return {
-        "1": [1000, 1100, 1200, 1300, 1400, 1500, 1600]
+        "inputs": [sample_churn_customer],
+        "context": {"request_id": "test-request"},
     }
 
+
+@pytest.fixture
+def sample_prediction_df(sample_churn_customer):
+    return pd.DataFrame([sample_churn_customer])
 
 @pytest.fixture
 def mock_xgb_model():
     model = MagicMock()
-    model.get_booster.return_value.feature_names = [
-        "Store",
-        "DayOfWeek",
-        "Customers",
-        "Open",
-        "Promo",
-        "StateHoliday",
-        "SchoolHoliday",
-        "StoreType",
-        "Assortment",
-        "CompetitionDistance",
-        "Promo2",
-        "WeekOfYear",
-        "day",
-        "month",
-        "year",
-        "is_month_start",
-        "is_month_end",
-        "sales_lag_1",
-        "sales_lag_7",
-        "sales_rolling_mean_7",
-    ]
-    model.predict.return_value = [8.597486]
-    return model
 
+    model.get_booster.return_value.feature_names = [
+        "tenure",
+        "monthlycharges",
+        "totalcharges",
+        "seniorcitizen",
+        "gender_Male",
+        "partner_Yes",
+        "dependents_Yes",
+        "phoneservice_Yes",
+        "multiplelines_Yes",
+        "internetservice_Fiber optic",
+        "internetservice_No",
+        "onlinesecurity_Yes",
+        "onlinebackup_Yes",
+        "deviceprotection_Yes",
+        "techsupport_Yes",
+        "streamingtv_Yes",
+        "streamingmovies_Yes",
+        "contract_One year",
+        "contract_Two year",
+        "paperlessbilling_Yes",
+        "paymentmethod_Credit card (automatic)",
+        "paymentmethod_Electronic check",
+        "paymentmethod_Mailed check",
+    ]
+
+    model.predict.return_value = [0.82]
+
+    return model
 
 @pytest.fixture
 def api_client():
