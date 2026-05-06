@@ -209,6 +209,40 @@ def health(response: Response):
         "model_version": serving_model_version
     }
 
+@app.get("/livez")
+def livez():
+    """
+    Liveness probe.
+
+    Returns 200 if the API process is running.
+    Does not check whether a model is loaded.
+    """
+    return {
+        "status": "alive",
+        "service": CFG.get("project_name", "churn-prediction-api"),
+        "environment": CFG.get("environment", "unknown"),
+    }
+
+@app.get("/readyz")
+def readyz():
+    """
+    Readiness probe.
+
+    Returns 200 only if the API is ready to serve predictions.
+    """
+    if model is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Model is not loaded.",
+        )
+
+    return {
+        "status": "ready",
+        "model_name": MODEL_NAME,
+        "serving_alias": serving_alias,
+        "model_version": serving_model_version,
+    }
+
 @app.post("/explain", dependencies=[Depends(get_api_key)])
 def explain(payload: PredictionRequest, top_n: int = 5):
     """

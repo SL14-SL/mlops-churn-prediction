@@ -94,3 +94,20 @@ def test_metrics_endpoint_exposes_custom_metrics(api_client):
     assert response.status_code == 200
     assert "api_request_count_total" in response.text
     assert "api_request_latency_seconds" in response.text
+
+def test_readyz_endpoint(api_client):
+    response = api_client.get("/readyz")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ready"
+    assert body["serving_alias"] == "champion"
+
+def test_livez_endpoint(api_client):
+    response = api_client.get("/livez")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "alive"
+    assert "service" in body
+    assert "environment" in body
