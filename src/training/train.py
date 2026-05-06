@@ -172,6 +172,20 @@ def train(train_file: str | None = None, val_file: str | None = None):
         
         duration = time.perf_counter() - start_perf
         cost_summary = build_training_cost_summary(start_time, datetime.now(timezone.utc), duration)
+        mlflow.log_metric(
+            "training_duration_seconds",
+            cost_summary["training_duration_seconds"],
+        )
+
+        mlflow.log_metric(
+            "estimated_training_cost",
+            cost_summary["estimated_training_cost"],
+        )
+
+        mlflow.log_param(
+            "cost_currency",
+            cost_summary["currency"],
+        )
 
         log_feature_importance(model, list(X_train.columns))
 

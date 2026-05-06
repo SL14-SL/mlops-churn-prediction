@@ -1,5 +1,5 @@
 project:
-  name: mlops-churn-prediction
+  name: churn-prediction-mlops 
   domain: prediction
   schema_version: v1
 

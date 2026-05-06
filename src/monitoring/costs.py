@@ -33,8 +33,11 @@ def get_tracking_uri() -> str | None:
 
 
 def get_experiment_name() -> str:
-    return ENV_CFG.get("project_name", "ml-project")
-
+    training_cfg = load_config("training.yaml")
+    return training_cfg.get("project", {}).get(
+        "name",
+        ENV_CFG.get("project_name", "ml-project"),
+    )
 
 def load_training_runs(max_results: int = 1000) -> pd.DataFrame:
     tracking_uri = get_tracking_uri()

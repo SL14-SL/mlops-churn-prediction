@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from datetime import datetime
 from pathlib import Path
 
@@ -366,6 +365,10 @@ with tab1:
         "Monitoring für Churn-Risiko, Modellqualität, Retention-Aktionen und Business Impact."
     )
 
+############################################################################################
+##### Business KPIs
+############################################################################################
+ 
     if prediction_df is None or prediction_df.empty:
         st.warning(
             "No prediction log found yet. Run predictions first so "
@@ -375,11 +378,6 @@ with tab1:
         total_predictions = len(prediction_df)
         avg_churn_probability = prediction_df["churn_probability"].mean()
         high_risk_share = (prediction_df["churn_probability"] >= 0.5).mean()
-        expected_profit = (
-            prediction_df["expected_profit"].sum()
-            if "expected_profit" in prediction_df.columns
-            else None
-        )
         actions_rate = (prediction_df["action"] != "no_action").mean()
 
         k1, k2, k3, k4 = st.columns(4)
@@ -441,9 +439,69 @@ with tab1:
             )
             st.caption("All business metrics are evaluated on labeled data only.")
 
+
+############################################################################################
+######### Model Performance - F1, recall, precision, roc-auc, brier score
+############################################################################################
+
+        st.divider()
+
+        metrics = compute_model_metrics(prediction_df)
+
+        if metrics is not None:
+            m1, m2, m3, m4, m5 = st.columns(5)
+            m1.metric("F1 Score", f"{metrics['f1_score']:.3f}")
+            m2.metric("Recall", f"{metrics['recall']:.3f}")
+            m3.metric("Precision", f"{metrics['precision']:.3f}")
+            m4.metric("ROC AUC", f"{metrics['roc_auc']:.3f}")
+            m5.metric("Brier Score", f"{metrics['brier_score']:.3f}")
+        else:
+            st.info(
+                "No labeled ground truth available yet. Showing serving and business metrics only."
+            )
+
+
+############################################################################################
+##### Model Performance over time - graph
+############################################################################################
+ 
+        st.divider()
+
+        if performance_history_df is not None and not performance_history_df.empty:
+            st.subheader("📊 Model Performance Trend")
+            st.plotly_chart(
+                build_performance_history_chart(performance_history_df),
+                use_container_width=True,
+            )
+
+
+############################################################################################
+##### Churn Probability Distribution and Retention Actions
+############################################################################################            
+
+        st.divider()
+
+        col_left, col_right = st.columns(2)
+
+        with col_left:
+            st.subheader("📈 Churn Probability Distribution")
+            st.plotly_chart(build_probability_chart(prediction_df), use_container_width=True)
+
+        with col_right:
+            if "action" in prediction_df.columns:
+                st.subheader("🎯 Retention Actions")
+                st.plotly_chart(build_action_chart(prediction_df), use_container_width=True)
+            else:
+                st.info("No `action` column found in prediction log.")
+
+############################################################################################
+######### Profit Curve and Uplift Sensitivity Analysis
+############################################################################################
+
         st.divider()
 
         st.subheader("💼 Business Policy Analysis")
+        st.caption("Offline simulations for decision policy tuning.")
 
         policy_left, policy_right = st.columns(2)
 
@@ -494,82 +552,50 @@ with tab1:
                     "No uplift sensitivity file found yet. Run `uv run --no-sync python scripts/uplift_sensitivity.py`."
                 )
 
-        st.divider()
 
-        metrics = compute_model_metrics(prediction_df)
+############################################################################################
+####### Tables with Data to recent performance history and recent predictions
+############################################################################################
 
-        if metrics is not None:
-            m1, m2, m3, m4, m5 = st.columns(5)
-            m1.metric("F1 Score", f"{metrics['f1_score']:.3f}")
-            m2.metric("Recall", f"{metrics['recall']:.3f}")
-            m3.metric("Precision", f"{metrics['precision']:.3f}")
-            m4.metric("ROC AUC", f"{metrics['roc_auc']:.3f}")
-            m5.metric("Brier Score", f"{metrics['brier_score']:.3f}")
-        else:
-            st.info(
-                "No labeled ground truth available yet. Showing serving and business metrics only."
-            )
+        # st.divider()
+        # if performance_history_df is not None and not performance_history_df.empty:
+        #     st.subheader("🧾 Recent Performance History")
+        #     st.dataframe(
+        #         performance_history_df.tail(20),
+        #         use_container_width=True,
+        #         hide_index=True,
+        #     )
+        # else:
+        #     st.info(
+        #         "No churn performance history found yet. Expected file: "
+        #         "`data/monitoring/churn_performance_history.parquet`."
+        #     )
+        # st.subheader("📝 Recent Predictions")
+        # display_cols = [
+        #     col
+        #     for col in [
+        #         "prediction_time",
+        #         "customerid",
+        #         "churn_probability",
+        #         "churn_prediction",
+        #         "churn",
+        #         "action",
+        #         "expected_profit",
+        #         "request_id",
+        #     ]
+        #     if col in prediction_df.columns
+        # ]
 
-        st.divider()
+        # st.dataframe(
+        #     prediction_df[display_cols].tail(25) if display_cols else prediction_df.tail(25),
+        #     use_container_width=True,
+        #     hide_index=True,
+        # )
 
-        col_left, col_right = st.columns(2)
 
-        with col_left:
-            st.subheader("📈 Churn Probability Distribution")
-            st.plotly_chart(build_probability_chart(prediction_df), use_container_width=True)
-
-        with col_right:
-            if "action" in prediction_df.columns:
-                st.subheader("🎯 Retention Actions")
-                st.plotly_chart(build_action_chart(prediction_df), use_container_width=True)
-            else:
-                st.info("No `action` column found in prediction log.")
-
-        st.divider()
-
-        if performance_history_df is not None and not performance_history_df.empty:
-            st.subheader("📊 Model Performance Over Time")
-            st.plotly_chart(
-                build_performance_history_chart(performance_history_df),
-                use_container_width=True,
-            )
-
-            st.subheader("🧾 Recent Performance History")
-            st.dataframe(
-                performance_history_df.tail(20),
-                use_container_width=True,
-                hide_index=True,
-            )
-        else:
-            st.info(
-                "No churn performance history found yet. Expected file: "
-                "`data/monitoring/churn_performance_history.parquet`."
-            )
-
-        st.divider()
-
-        st.subheader("📝 Recent Predictions")
-        display_cols = [
-            col
-            for col in [
-                "prediction_time",
-                "customerid",
-                "churn_probability",
-                "churn_prediction",
-                "churn",
-                "action",
-                "expected_profit",
-                "request_id",
-            ]
-            if col in prediction_df.columns
-        ]
-
-        st.dataframe(
-            prediction_df[display_cols].tail(25) if display_cols else prediction_df.tail(25),
-            use_container_width=True,
-            hide_index=True,
-        )
-
+############################################################################################
+####### Tab 2: Cost Monitoring
+############################################################################################
 
 with tab2:
     st.title("💰 Cost Monitoring")

@@ -59,9 +59,7 @@ logger.info(f"Using MLflow tracking URI: {tracking_uri}")
 @task(name="Check Feature Drift")
 def task_check_drift() -> bool:
     """
-    Run feature drift monitoring and return whether drift was detected.
-
-    Uses churn feature drift results instead of forecasting-based Sales drift.
+    Run churn feature drift monitoring and return whether drift was detected.
     """
     p_logger = get_run_logger()
 
@@ -97,9 +95,9 @@ def task_evaluate_champion():
     p_logger = get_run_logger()
     p_logger.info("Evaluating current champion for dashboard continuity.")
     try:
-        rmse = evaluate_model(model_alias="champion")
-        print(f"Champion RMSE: {rmse}")
-        return rmse
+        champion_f1 = evaluate_model(model_alias="champion")
+        print(f"Champion F1: {champion_f1}")
+        return champion_f1
     except Exception as e:
         p_logger.warning(f"Could not evaluate champion: {e}")
         return None
@@ -142,8 +140,11 @@ def task_eval_and_reg(new_run_id: str):
     p_logger = get_run_logger()
     is_better, metrics = compare_models(new_run_id)
 
-    if metrics and "rmse_euro" in metrics:
-        print(f"Challenger RMSE: {metrics['rmse_euro']}")
+    if metrics and "challenger_f1" in metrics:
+        print(f"Challenger F1: {metrics['challenger_f1']}")
+
+    if metrics and "champion_f1" in metrics:
+        print(f"Champion F1: {metrics['champion_f1']}")
 
     if is_better:
         p_logger.info(f"Challenger (Run: {new_run_id}) outperforms Champion. Promoting...")

@@ -71,8 +71,6 @@ api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
 async def get_api_key(api_key_header: str = Security(api_key_header)):
     """Validates the API Key from the request header."""
-    expected_key = os.getenv("API_KEY")
-    logger.info(f"DEBUG: Received: {api_key_header}, Expected: {expected_key}")
     if api_key_header == os.getenv("API_KEY"):
         return api_key_header
     raise HTTPException(
