@@ -113,7 +113,7 @@ jobs:
             -e APP_ENV=dev \
             -e API_KEY=test-secret-key \
             -e PREFECT_API_MODE=ephemeral \
-            -e SMOKE-TEST=1 \
+            -e SMOKE_TEST=1 \
             -e MLFLOW_TRACKING_URI=http://localhost:5000 \
             churn-api:smoke
 
