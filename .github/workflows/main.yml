@@ -118,11 +118,22 @@ jobs:
 
       - name: Wait for liveness
         run: |
-          for i in {1..30}; do
-            if curl -fsS http://localhost:8080/livez; then
+          for i in {1..60}; do
+            if ! docker ps --format '{{.Names}}' | grep -q '^churn-api-smoke$'; then
+              echo "Container stopped unexpectedly"
+              docker logs churn-api-smoke
+              exit 1
+            fi
+
+            status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/livez || true)
+
+            if [ "$status" = "200" ]; then
+              echo "API is live"
               exit 0
             fi
-            sleep 2
+
+            echo "Waiting for API... attempt=$i status=$status"
+            sleep 3
           done
 
           docker logs churn-api-smoke
