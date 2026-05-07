@@ -181,7 +181,7 @@ jobs:
 # 5️⃣ BUILD API (Build → Scan → Push)
 # -------------------------------------------------
   build-api:
-    needs: test
+    needs: smoke-test-api
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
@@ -292,7 +292,7 @@ jobs:
 # 7️⃣ BUILD MLFLOW (Build → Scan → Push)
 # -------------------------------------------------
   build-mlflow:
-    needs: test
+    needs: smoke-test-api
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
@@ -364,6 +364,10 @@ jobs:
     if: github.ref == 'refs/heads/main'
 
     env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ vars.GCP_REGION }}
+      GCP_ARTIFACT_REPO: ${{ vars.GCP_ARTIFACT_REPO }}
+      GCS_BUCKET_NAME: ${{ vars.GCP_BUCKET_NAME }}
       MLFLOW_BACKEND_STORE_URI: sqlite:///tmp/mlflow.db
       MLFLOW_ARTIFACT_ROOT: gs://${{ vars.GCP_BUCKET_NAME }}/mlruns
       MLFLOW_SERVER_ALLOWED_HOSTS: "*"
