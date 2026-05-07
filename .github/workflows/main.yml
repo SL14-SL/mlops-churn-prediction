@@ -214,16 +214,16 @@ jobs:
           push: false
           load: true
           tags: |
-            ${{ vars.GCP_ARTIFACT_REPO }}/mlops-api:${{ github.sha }}
-            ${{ vars.GCP_ARTIFACT_REPO }}/mlops-api:latest
-            mlops-api:scan
+            ${{ vars.GCP_ARTIFACT_REPO }}/mlops-churn-api:${{ github.sha }}
+            ${{ vars.GCP_ARTIFACT_REPO }}/mlops-churn-api:latest
+            mlops-churn-api:scan
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Scan image for vulnerabilities
         uses: aquasecurity/trivy-action@0.35.0
         with:
-          image-ref: mlops-api:scan
+          image-ref: mlops-churn-api:scan
           format: table
           scan-type: image
           scanners: vuln
@@ -233,11 +233,11 @@ jobs:
 
       - name: Push Container
         run: |
-          docker tag mlops-api:scan ${{ vars.GCP_ARTIFACT_REPO }}/mlops-api:${{ github.sha }}
-          docker tag mlops-api:scan ${{ vars.GCP_ARTIFACT_REPO }}/mlops-api:latest
+          docker tag mlops-churn-api:scan ${{ vars.GCP_ARTIFACT_REPO }}/mlops-churn-api:${{ github.sha }}
+          docker tag mlops-churn-api:scan ${{ vars.GCP_ARTIFACT_REPO }}/mlops-churn-api:latest
 
-          docker push ${{ vars.GCP_ARTIFACT_REPO }}/mlops-api:${{ github.sha }}
-          docker push ${{ vars.GCP_ARTIFACT_REPO }}/mlops-api:latest
+          docker push ${{ vars.GCP_ARTIFACT_REPO }}/mlops-churn-api:${{ github.sha }}
+          docker push ${{ vars.GCP_ARTIFACT_REPO }}/mlops-churn-api:latest
 
 # -------------------------------------------------
 # 6️⃣ DEPLOY API (CLI)
