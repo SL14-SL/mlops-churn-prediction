@@ -1,3 +1,6 @@
+# Readme needs to be adapted to churn!
+
+
 # 🚀 MLOps Blueprint — Turn your ML models into reliable production systems
 
 > Most ML models don’t fail at training — they fail in production.  

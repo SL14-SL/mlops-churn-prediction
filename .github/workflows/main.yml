@@ -85,8 +85,63 @@ jobs:
           name: pytest-results
           path: result.xml
 
+          # -------------------------------------------------
+# 3️⃣ API SMOKE TEST
 # -------------------------------------------------
-# 3️⃣ TERRAFORM PLAN
+  smoke-test-api:
+    needs: test
+    runs-on: ubuntu-latest
+
+    env:
+      APP_ENV: dev
+      API_KEY: test-secret-key
+      PREFECT_API_MODE: ephemeral
+      MLFLOW_TRACKING_URI: http://localhost:5000
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Build API image
+        run: docker build -t churn-api:smoke .
+
+      - name: Run API container
+        run: |
+          docker run -d \
+            --name churn-api-smoke \
+            -p 8080:8080 \
+            -e APP_ENV=dev \
+            -e API_KEY=test-secret-key \
+            -e PREFECT_API_MODE=ephemeral \
+            -e MLFLOW_TRACKING_URI=http://localhost:5000 \
+            churn-api:smoke
+
+      - name: Wait for liveness
+        run: |
+          for i in {1..30}; do
+            if curl -fsS http://localhost:8080/livez; then
+              exit 0
+            fi
+            sleep 2
+          done
+
+          docker logs churn-api-smoke
+          exit 1
+
+      - name: Check metrics endpoint
+        run: curl -fsS http://localhost:8080/metrics
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker logs churn-api-smoke
+
+      - name: Stop container
+        if: always()
+        run: docker rm -f churn-api-smoke
+
+
+# -------------------------------------------------
+# 4️⃣ TERRAFORM PLAN
 # -------------------------------------------------
   terraform-plan:
     if: github.event_name == 'pull_request'
@@ -111,11 +166,12 @@ jobs:
         run: terraform plan
 
 # -------------------------------------------------
-# 4️⃣ BUILD API (Build → Scan → Push)
+# 5️⃣ BUILD API (Build → Scan → Push)
 # -------------------------------------------------
   build-api:
     needs: test
-    if: github.ref == 'refs/heads/main'
+    if: false     
+    #github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -173,12 +229,13 @@ jobs:
           docker push ${{ vars.GCP_ARTIFACT_REPO }}/mlops-api:latest
 
 # -------------------------------------------------
-# 5️⃣ DEPLOY API (CLI)
+# 6️⃣ DEPLOY API (CLI)
 # -------------------------------------------------
   deploy-api:
     needs: build-api
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: false
+    #if: github.ref == 'refs/heads/main'
 
     env:
       APP_ENV: prod
@@ -222,11 +279,12 @@ jobs:
             --env-from GCS_BUCKET_NAME
 
 # -------------------------------------------------
-# 6️⃣ BUILD MLFLOW (Build → Scan → Push)
+# 7️⃣ BUILD MLFLOW (Build → Scan → Push)
 # -------------------------------------------------
   build-mlflow:
     needs: test
-    if: github.ref == 'refs/heads/main'
+    if: false
+    #if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -288,12 +346,13 @@ jobs:
           docker push ${{ vars.GCP_ARTIFACT_REPO }}/mlflow:latest
 
 # -------------------------------------------------
-# 7️⃣ DEPLOY MLFLOW (CLI)
+# 8 DEPLOY MLFLOW (CLI)
 # -------------------------------------------------
   deploy-mlflow:
     needs: build-mlflow
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: false
+    #if: github.ref == 'refs/heads/main'
 
     env:
       MLFLOW_BACKEND_STORE_URI: sqlite:///tmp/mlflow.db
