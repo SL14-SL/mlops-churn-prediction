@@ -250,6 +250,8 @@ jobs:
     env:
       APP_ENV: prod
       API_KEY: ${{ secrets.API_KEY }}
+      GCP_REGION: ${{ vars.GCP_REGION }}
+      GCP_ARTIFACT_REPO: ${{ vars.GCP_ARTIFACT_REPO }}
       MLFLOW_TRACKING_URI: ${{ vars.MLFLOW_URL }}
       GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
       GCS_BUCKET_NAME: ${{ vars.GCP_BUCKET_NAME }}
@@ -284,6 +286,8 @@ jobs:
             --service-account "${{ secrets.GCP_SA_EMAIL }}" \
             --env-from APP_ENV \
             --env-from API_KEY \
+            --project-id "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
             --env-from MLFLOW_TRACKING_URI \
             --env-from GCP_PROJECT_ID \
             --env-from GCS_BUCKET_NAME
@@ -400,6 +404,8 @@ jobs:
         run: |
           uv run --active python -m src.deployment.cli deploy mlflow --tag 3.9.0 \
             --service-account "${{ secrets.GCP_SA_EMAIL }}" \
+            --project-id "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
             --env-from MLFLOW_BACKEND_STORE_URI \
             --env-from MLFLOW_ARTIFACT_ROOT \
             --env-from MLFLOW_SERVER_ALLOWED_HOSTS
