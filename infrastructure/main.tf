@@ -35,7 +35,7 @@ resource "google_service_account" "mlops_sa" {
 
 # --- Cloud Storage Bucket for Artifacts ---
 resource "google_storage_bucket" "artifacts_bucket" {
-  name                        = "mlops-demand-artifacts-${var.project_id}"
+  name                        = "mlops-churn-artifacts-${var.project_id}"
   location                    = var.region
   force_destroy               = true
   uniform_bucket_level_access = true

@@ -182,8 +182,7 @@ jobs:
 # -------------------------------------------------
   build-api:
     needs: test
-    if: false     
-    #github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -246,8 +245,7 @@ jobs:
   deploy-api:
     needs: build-api
     runs-on: ubuntu-latest
-    if: false
-    #if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main'
 
     env:
       APP_ENV: prod
@@ -295,8 +293,7 @@ jobs:
 # -------------------------------------------------
   build-mlflow:
     needs: test
-    if: false
-    #if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -363,8 +360,8 @@ jobs:
   deploy-mlflow:
     needs: build-mlflow
     runs-on: ubuntu-latest
-    if: false
-    #if: github.ref == 'refs/heads/main'
+    #if: false
+    if: github.ref == 'refs/heads/main'
 
     env:
       MLFLOW_BACKEND_STORE_URI: sqlite:///tmp/mlflow.db
