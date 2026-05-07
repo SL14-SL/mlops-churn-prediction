@@ -3,7 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-
+import os
+import re
 import yaml
 
 
@@ -27,14 +28,45 @@ def _load_yaml(path: Path) -> dict[str, Any]:
 
     return data
 
+_ENV_PATTERN = re.compile(r"\$\{([^}:]+)(:-([^}]*))?\}")
+
+
+def _expand_env_placeholders(value: Any) -> Any:
+    """
+    Recursively expand ${VAR} and ${VAR:-default} placeholders in config values.
+    """
+
+    if isinstance(value, str):
+        def replace(match: re.Match[str]) -> str:
+            name = match.group(1)
+            default = match.group(3)
+            env_value = os.getenv(name)
+
+            if env_value is not None:
+                return env_value
+
+            if default is not None:
+                return default
+
+            return match.group(0)
+
+        return _ENV_PATTERN.sub(replace, value)
+
+    if isinstance(value, dict):
+        return {key: _expand_env_placeholders(item) for key, item in value.items()}
+
+    if isinstance(value, list):
+        return [_expand_env_placeholders(item) for item in value]
+
+    return value
+
 
 def load_gcp_config(config_path: str | None = None) -> dict[str, Any]:
     """
     Load the GCP deployment config from configs/gcp.yaml.
     """
     path = Path(config_path) if config_path else _project_root() / "configs" / "gcp.yaml"
-    data = _load_yaml(path)
-
+    data = _expand_env_placeholders(_load_yaml(path))
     if "gcp" not in data:
         raise DeploymentConfigError("Missing top-level 'gcp' key in configs/gcp.yaml")
 
