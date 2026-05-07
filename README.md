@@ -1,450 +1,395 @@
-# Readme needs to be adapted to churn!
+# 🚀 Production-Grade MLOps Platform for Customer Churn Prediction
 
+Production-ready MLOps platform for customer churn prediction featuring:
 
-# 🚀 MLOps Blueprint — Turn your ML models into reliable production systems
+- FastAPI model serving
+- MLflow model registry
+- automated CI/CD pipelines
+- Docker + Cloud Run deployment
+- monitoring & drift detection
+- automated retraining workflows
+- Terraform infrastructure provisioning
+- GitHub Actions + security scanning
 
-> Most ML models don’t fail at training — they fail in production.  
-> I help teams detect, monitor and continuously improve ML models in production before they cost you money.
-
----
-
-## 🧠 The Problem (for real teams)
-
-This system is built for teams that:
-
-- already have ML models in production  
-- rely on predictions for business decisions (forecasting, pricing, etc.)  
-- don’t fully trust their model outputs  
-- retrain models manually — or not at all  
-
-🚨 **Reality:**
-
-Models degrade silently.
-
-- Data changes → predictions become wrong  
-- No monitoring → no one notices  
-- No alerts → problems stay hidden  
-- No retraining → performance keeps dropping  
-
-👉 By the time you react, your model is already costing you money.
+This project demonstrates how to build, deploy, monitor, and continuously improve ML systems in production.
 
 ---
 
-## 💸 What this costs you
+# 🏗️ Architecture Overview
 
-When ML systems are not monitored:
-
-- 📉 Forecast errors increase → bad inventory decisions  
-- 💰 Pricing models drift → margin loss  
-- 🛒 Recommendations degrade → lower conversion  
-
-👉 This is not a technical issue — it's a business risk.
-
----
-
-## 🎯 What I do
-
-I turn fragile ML models into **reliable production systems**.
-
-Instead of static models, I build systems that:
-
-- detect when performance drops  
-- alert before it becomes critical  
-- retrain models automatically  
-
-👉 Result: your model becomes a controlled, continuously improving system
-
----
-
-## 🎬 How it works (end-to-end)
-
-1. **Model runs in production**  
-   → Predictions are served via API and logged  
-
-2. **Data starts drifting**  
-   → Monitoring detects distribution changes  
-
-3. **Performance degrades**  
-   → Alert is triggered automatically  
-
-4. **System reacts**  
-   → Retraining pipeline is executed  
-
-5. **New model is deployed**  
-   → Performance is improved or stabilized  
-
-👉 Result: a **self-healing ML system**
-
----
-
-## 🔄 Self-Healing ML Loop
-
-```mermaid
-flowchart TD
-    A[Model serves predictions] --> B[Predictions are logged]
-    B --> C[Monitoring]
-    C --> D{Degradation detected?}
-    D -- No --> A
-    D -- Yes --> E[Alert is triggered]
-    E --> F[Retraining pipeline starts]
-    F --> G[New model is registered]
-    G --> H[Updated model is deployed]
-    H --> A
-```
-
----
-
-## 🏗️ What’s inside
-
-This blueprint includes everything needed for production ML:
-
-### 🔌 Serving & APIs
-- FastAPI prediction service  
-- Structured inference logging  
-
-### 🔁 Pipelines & Orchestration
-- Training & retraining pipelines (Prefect)  
-- Trigger-based retraining  
-
-### 📊 Monitoring & Observability
-- Data drift detection  
-- Feature drift tracking  
-- Performance monitoring  
-- Alerting system  
-
-### 🧠 Model Management
-- MLflow tracking & registry  
-- Model versioning  
-
-### 🗂️ Data & Reproducibility
-- Dataset versioning  
-- Validation pipelines  
-- Reproducible training runs  
-
-### ⚙️ Infrastructure
-- Dockerized services  
-- CI/CD pipeline with automated build, security scan, and deployment (GitHub Actions)
-- Cloud deployment (GCP, Terraform)  
-
----
-
-## 🗺️ Architecture Overview
 
 ```mermaid
 flowchart TB
-    A[Raw Data] --> B[Validation]
-    B --> C[Features]
-    C --> D[Training - Prefect]
+    A[Raw Customer Data] --> B[Validation]
+    B --> C[Feature Engineering]
+    C --> D[Training Pipeline - Prefect]
     D --> E[MLflow Registry]
-    E --> F[API - FastAPI]
+    E --> F[FastAPI Prediction API]
 
     F --> G[Prediction Logs]
-    G --> H[Monitoring]
+    G --> H[Monitoring Layer]
 
-    H --> I[Drift]
-    H --> J[Performance]
-    H --> K[Alerts]
+    H --> I[Data Drift Detection]
+    H --> J[Performance Monitoring]
+    H --> K[Alerts & Retraining Trigger]
 
-    K --> L[Retrain Trigger]
+    K --> L[Retraining Pipeline]
     L --> D
 ```
 
 ---
 
-## 📊 What this demonstrates
+# ⚙️ Key Capabilities
 
-This project simulates real-world ML failure scenarios:
+## 🔌 Model Serving
 
-- models degrade under changing data  
-- monitoring detects issues early  
-- retraining is triggered automatically  
-- only better models are deployed  
-- deployment and updates are handled via automated CI/CD workflows
-
-👉 This is the difference between a notebook and a production system.
+- FastAPI inference API
+- structured request/response logging
+- health & liveness endpoints
+- Prometheus metrics endpoint
 
 ---
 
-### ❌ Without retraining (static model)
+## 📊 Monitoring & Observability
 
-![Without Retraining](docs/images/performance_demo_wo_retraining_example.png)
-
-- performance gradually degrades over time  
-- no mechanism to detect or react to changes  
-- errors accumulate silently  
-
----
-
-### ✅ With monitoring + intelligent retraining
-
-![With Retraining](docs/images/performance_demo_example.png)
-
-- degradation is detected early  
-- retraining is triggered automatically  
-- only better models are deployed  
-- performance is kept under control over time  
-
-👉 The system does not eliminate degradation — it keeps it under control.  
-👉 Stability without monitoring can be misleading.
+- data quality validation
+- feature drift monitoring
+- classification performance monitoring
+- retraining triggers
+- operational dashboards
 
 ---
 
+## 🔁 Automated Pipelines
+
+- training pipelines with Prefect
+- automated retraining workflows
+- model evaluation & promotion
+- MLflow experiment tracking
+
 ---
 
-## ⚙️ Configuration
+## ☁️ Cloud Infrastructure
 
-The system follows a **configuration-driven design**, separating environments, infrastructure, and runtime values.
+- Dockerized services
+- Cloud Run deployment
+- Artifact Registry integration
+- Infrastructure-as-Code with Terraform
+- GitHub Actions CI/CD pipeline
 
-### Configuration structure
+---
 
-- `configs/dev.yaml` → local development  
-- `configs/prod.yaml` → production setup  
-- `configs/gcp.yaml` → infrastructure definition  
-- `.env` → environment-specific values (secrets, URLs, credentials)  
+## 🔒 Security & Reliability
 
-### Environment switching
+- Trivy container vulnerability scanning
+- smoke tests before deployment
+- automated linting & testing
+- non-root Docker containers
+- Workload Identity Federation authentication
 
-The active configuration is controlled via:
+---
 
-```bash
-APP_ENV=dev   # local development  
-APP_ENV=prod  # production setup  
+# 🔄 Continuous ML Lifecycle
+
+This platform demonstrates a complete production ML lifecycle:
+
+1. model is trained and registered
+2. prediction API serves live requests
+3. predictions and metadata are logged
+4. monitoring detects degradation or drift
+5. retraining pipeline is triggered
+6. improved model is promoted and deployed
+
+The goal is not static ML models — but continuously monitored and maintainable ML systems.
+
+---
+
+# 🧪 CI/CD Pipeline
+
+The project includes a fully automated CI/CD pipeline using GitHub Actions.
+
+Pipeline stages include:
+
+- linting
+- unit tests
+- API smoke tests
+- Docker image builds
+- vulnerability scanning
+- container registry push
+- Cloud Run deployment
+
+# ![CI Pipeline](docs/images/CI-Pipeline.png)
+
+---
+
+# ☁️ Infrastructure Stack
+
+## Core Stack
+
+- Python 3.12
+- FastAPI
+- MLflow
+- Prefect
+- scikit-learn
+- Pandas
+- Docker
+
+---
+
+## Cloud & DevOps
+
+- GCP Cloud Run
+- GCP Artifact Registry
+- GCS
+- Terraform
+- GitHub Actions
+- Prometheus
+- Grafana
+
+---
+
+# 📊 Monitoring & Retraining
+
+The platform supports operational ML monitoring:
+
+- classification metrics tracking
+- drift monitoring
+- production inference logging
+- retraining trigger conditions
+- model version tracking
+
+This demonstrates how production ML systems can remain observable and maintainable over time.
+
+---
+
+# 📁 Project Structure
+
+```text
+.
+├── configs/               # environment & infrastructure configs
+│   ├── dev.yaml
+│   ├── prod.yaml
+│   └── gcp.yaml
+│
+├── src/                   # application source code
+│   ├── api/
+│   ├── data/
+│   ├── deployment/
+│   ├── monitoring/
+│   ├── training/
+│   └── inference/
+│
+├── flows/                 # Prefect orchestration flows
+├── infrastructure/        # Terraform infrastructure
+├── tests/                 # unit & integration tests
+├── docs/                  # diagrams & documentation
+├── scripts/               # helper scripts & demos
+└── .github/workflows/    # CI/CD pipelines
 ```
 
-### Environment variables
+---
 
-Copy the example file:
+# ⚡ Quick Start
+
+## 1️⃣ Clone repository
+
+```bash
+git clone <your-repo-url>
+cd churn-prediction-mlops
+```
+
+---
+
+## 2️⃣ Configure environment
 
 ```bash
 cp .env.example .env
 ```
 
-Then fill in required values such as:
+Set required variables:
 
-- API keys  
-- cloud configuration (GCP)  
-- service endpoints (MLflow, API, Prefect)  
-
-The system can be fully configured without changing the code.
+- API_KEY
+- GCP configuration (optional for local dev)
 
 ---
 
-## 🧪 Environments
-
-### Dev mode
-
-- local services (MLflow, API, Prefect)  
-- local file system  
-- fast iteration  
-
-### Prod mode
-
-- cloud services (GCP, Cloud Run)  
-- remote MLflow tracking  
-- GCS storage  
-
-Switch between environments using `APP_ENV`.
-
----
-
-## ⚡ Quick Start
-
-### 1. Set up environment variables
-
-Copy the example configuration:
-
-```bash
-cp .env.example .env
-```
-
-👉 A minimal setup is sufficient for the local demo (API_KEY).  
-Most integrations (cloud, Slack, etc.) are optional.
-
----
-
-### 2. Provide input data
-
-This project requires input data to run the training pipeline.
-
-Place your dataset in:
-
-data/raw/
-
-Minimum required files:
-
-- train.csv  
-- store.csv  
-
-👉 These files must follow the expected schema (Store, Date, Sales, Promo).
-
----
-
-### 3. Start the system
+## 3️⃣ Start local services
 
 ```bash
 make dev-up
 ```
 
+This starts:
+
+- FastAPI
+- MLflow
+- Prefect
+- PostgreSQL
+- Prometheus
+- Grafana
+
 ---
 
-### 4. Run initial training
+## 4️⃣ Run training pipeline
 
 ```bash
 make train-force
 ```
 
-This will:
+This executes:
 
-- run the data pipeline (ingestion → validation → features)  
-- train the model  
-- register it in MLflow  
-- prepare the system for predictions  
+- ingestion
+- validation
+- feature engineering
+- model training
+- MLflow registration
 
 ---
 
-### 5. Run the self-healing simulation
+## 5️⃣ Start inference API
 
 ```bash
-python scripts/run_performance_demo.py
+uv run uvicorn src.api.app:app --host 0.0.0.0 --port 8080
 ```
 
-This simulates:
-
-- incoming production data  
-- gradual performance degradation  
-- automatic monitoring and alerts  
-- retraining triggers and model evaluation  
-
-👉 Demonstrates how the system reacts to real-world conditions
-
 ---
 
-## 📦 Data Requirements
+## 6️⃣ Run tests
 
-This project is built around a demand forecasting use case.
-
-The training pipeline expects tabular data with columns such as:
-
-- Store  
-- Date  
-- Sales  
-- Promo  
-
-👉 The feature engineering and model logic depend on this schema.
-
----
-
-### Data source
-
-The example dataset is based on:
-
-👉 https://www.kaggle.com/c/rossmann-store-sales
-
----
-
-### Important
-
-This is a blueprint, not a plug-and-play model for arbitrary datasets.
-
-You cannot simply drop in any CSV file and expect the system to work.
-
----
-
-### Using your own data
-
-To adapt this system, you will need to:
-
-- adjust column mappings  
-- modify feature engineering  
-- update validation logic  
-
-👉 This reflects real-world MLOps work.
-
----
-
-## 💼 How I help teams
-
-### 🟢 Step 1 — Get your model into production
-- API  
-- Docker  
-- MLflow  
-
-👉 Outcome: **Your model runs reliably**
-
----
-
-### 🟡 Step 2 — Make it observable
-- Monitoring  
-- Drift detection  
-- Alerts  
-
-👉 Outcome: **You know when your model breaks**
-
----
-
-### 🔴 Step 3 — Make it self-improving
-- Automated retraining  
-- Continuous improvement  
-
-👉 Outcome: **Your model adapts automatically**
-
----
-
-## 🎁 What you get (if we work together)
-
-Within a few weeks:
-
-✔ Production-ready ML system  
-✔ Full monitoring & alerts  
-✔ Automated retraining  
-✔ Clear visibility into model performance  
-
-👉 Your ML system becomes predictable and reliable
-
----
-
-## 📩 Work with me
-
-If your ML model is already in production:
-
-- stabilize it  
-- monitor it  
-- automate it  
-
-👉 Send me a message — I’ll tell you what’s missing.
-
----
-
-**Stop treating ML as a one-time project.  
-Start building systems that evolve.**
-
----
-
-## 🧑‍💻 Technical details
-
-- Deployment & infrastructure → docs/deployment.md  
-
-👉 Includes Terraform-based infrastructure, cloud deployment, and CI/CD with automated security checks.
-
-
----
-
-## 📁 Project Structure
-
-```text
-.
-├── configs/          # environment & infrastructure configs
-│   ├── dev.yaml
-│   ├── prod.yaml
-│   └── gcp.yaml
-│
-├── src/              # core application logic
-│
-├── scripts/          # demos & utilities
-├── data/             # local datasets
-├── docs/             # architecture & deployment
+```bash
+pytest tests -v
 ```
 
-Clear separation between configuration, logic, and infrastructure.
+---
+
+# 🔧 Configuration
+
+The platform follows a configuration-driven architecture.
+
+## Environment configs
+
+- `configs/dev.yaml`
+- `configs/prod.yaml`
+- `configs/gcp.yaml`
 
 ---
+
+## Environment switching
+
+```bash
+APP_ENV=dev
+APP_ENV=prod
+```
+
+---
+
+## Infrastructure configuration
+
+Infrastructure values are injected via:
+
+- GitHub Variables
+- GitHub Secrets
+- environment variables
+
+This allows fully reproducible deployments across environments.
+
+---
+
+# ☁️ Deployment
+
+Infrastructure is provisioned with Terraform.
+
+Services are deployed automatically via GitHub Actions to:
+
+- Cloud Run
+- Artifact Registry
+- GCS
+
+---
+
+## Terraform
+
+```bash
+cd infrastructure
+terraform init
+terraform apply
+```
+
+---
+
+## GitHub Actions
+
+CI/CD automatically handles:
+
+- testing
+- scanning
+- image build
+- deployment
+
+on every push to `main`.
+
+---
+
+# 📈 API Endpoints
+
+## Health Check
+
+```bash
+GET /livez
+```
+
+---
+
+## Metrics
+
+```bash
+GET /metrics
+```
+
+---
+
+## Prediction Endpoint
+
+```bash
+POST /predict
+```
+
+---
+
+# 📦 Dataset
+
+This project uses the Telco Customer Churn dataset.
+
+The platform is designed around tabular churn prediction workflows and demonstrates production-ready ML infrastructure rather than dataset-specific modeling.
+
+---
+
+# 🎯 Project Goals
+
+This repository focuses on:
+
+- production ML engineering
+- operational ML systems
+- cloud-native deployment
+- monitoring & observability
+- reproducibility
+- CI/CD for ML systems
+
+The emphasis is on reliable ML infrastructure — not just model training.
+
+---
+
+# 📄 License
+
+MIT License
+
+---
+
+# 👨‍💻 Author
+
+Steffen Lauterbach  
+
+MLOps Engineer
+
+[LinkedIn](www.linkedin.com/in/92-steffen-lauterbach)
+
