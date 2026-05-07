@@ -108,17 +108,21 @@ def reload_serving_model() -> dict:
         "model_uri": model_uri,
         "decision_threshold": decision_threshold,
     }
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Handles startup and shutdown. 
+    Handles startup and shutdown.
     Loads the ML model from registry and initializes data quality caches.
     """
     global model, model_type, model_uri, serving_alias
     global serving_model_version, serving_model_run_id, dq_reference_categories
 
     try:
+        if os.getenv("SMOKE_TEST") == "1":
+            logger.info("Smoke test mode enabled. Skipping model and data quality startup loading.")
+            yield
+            return
+
         # --- Initialize Data Quality Cache ---
         ref_df = initialize_data_quality_reference_cache()
         dq_reference_categories = build_reference_category_cache(
@@ -139,8 +143,6 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         logger.info("Shutdown: Cleaning up resources.")
-
-
 
 app = FastAPI(title="Churn Prediction API", lifespan=lifespan)
 SERVING_CFG = get_serving_settings()
