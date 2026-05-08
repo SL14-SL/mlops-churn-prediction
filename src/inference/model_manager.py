@@ -1,3 +1,4 @@
+import json
 import os
 import socket
 from typing import Any
@@ -38,6 +39,45 @@ def resolve_tracking_uri(cfg: dict) -> str:
     return cfg.get("mlflow_tracking_uri", "http://localhost:5000")
 
 
+def load_feature_schema_from_mlflow(
+    *,
+    run_id: str,
+    fallback_to_local: bool = True,
+) -> dict[str, Any]:
+    """
+    Load the feature schema from the MLflow run artifacts.
+
+    The schema is logged during training under:
+    feature_schema/feature_schema.json
+
+    Falls back to the local models/feature_schema.json for local development.
+    """
+    client = MlflowClient()
+
+    try:
+        local_path = client.download_artifacts(
+            run_id=run_id,
+            path="feature_schema/feature_schema.json",
+        )
+
+        with open(local_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+
+    except Exception as exc:
+        logger.warning(
+            "Could not load feature schema from MLflow artifacts "
+            "(run_id=%s): %s",
+            run_id,
+            exc,
+        )
+
+        if fallback_to_local:
+            logger.warning("Falling back to local feature schema.")
+            return load_feature_schema()
+
+        raise
+
+
 def reload_serving_model(
     *,
     model_name: str,
@@ -52,8 +92,6 @@ def reload_serving_model(
 
     model, model_type, serving_alias, model_uri, decision_threshold = load_registry_model(model_name)
 
-    feature_schema = load_feature_schema()
-
     serving_model_version = None
     serving_model_run_id = None
 
@@ -62,12 +100,23 @@ def reload_serving_model(
         version = client.get_model_version_by_alias(model_name, serving_alias)
         serving_model_version = str(version.version)
         serving_model_run_id = version.run_id
+    else:
+        raise RuntimeError(
+            f"Cannot load feature schema because no valid serving alias was resolved "
+            f"for model '{model_name}'."
+        )
+
+    feature_schema = load_feature_schema_from_mlflow(
+        run_id=serving_model_run_id,
+        fallback_to_local=not os.getenv("K_SERVICE"),
+    )
 
     logger.info(
-        "Model reloaded: %s (alias=%s, version=%s)",
+        "Model reloaded: %s (alias=%s, version=%s, run_id=%s)",
         model_name,
         serving_alias,
         serving_model_version,
+        serving_model_run_id,
     )
 
     return {
