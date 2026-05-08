@@ -145,7 +145,13 @@ async def lifespan(app: FastAPI):
     finally:
         logger.info("Shutdown: Cleaning up resources.")
 
-app = FastAPI(title="Churn Prediction API", lifespan=lifespan)
+app = FastAPI(
+    title="Churn Prediction API", 
+    lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+    )
+
 SERVING_CFG = get_serving_settings()
 
 
