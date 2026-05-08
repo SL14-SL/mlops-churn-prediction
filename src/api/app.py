@@ -10,6 +10,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Security, Depends, Response, Request
 from fastapi.security.api_key import APIKeyHeader
 from fastapi.responses import PlainTextResponse, StreamingResponse
+from fastapi.openapi.docs import get_swagger_ui_html
 
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from starlette.status import HTTP_403_FORBIDDEN
@@ -146,6 +147,18 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Churn Prediction API", lifespan=lifespan)
 SERVING_CFG = get_serving_settings()
+
+
+@app.get("/docs", include_in_schema=False)
+async def custom_swagger_ui():
+    return get_swagger_ui_html(
+        openapi_url=app.openapi_url,
+        title="Churn Prediction API Docs",
+        swagger_css_url=(
+            "https://cdn.jsdelivr.net/npm/"
+            "swagger-ui-themes@3.0.1/themes/3.x/theme-monokai.css"
+        ),
+    )
 
 # --- Middleware for Monitoring & Prometheus ---
 @app.middleware("http")

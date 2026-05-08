@@ -1,282 +1,471 @@
 # 🚀 Deployment Guide
 
-This document describes how to deploy the MLOps system in a cloud environment.
+This document describes how to deploy the production-grade MLOps platform on GCP.
 
-The system is designed to be reproducible, containerized, and production-ready.
+The platform includes:
 
-👉 This guide covers both local (Docker-based) and cloud (Terraform-based) deployment options.
-
----
-
-## 🧠 Overview
-
-The deployment includes:
-
-- Prediction API (FastAPI)
-- MLflow tracking & model registry
-- Prefect orchestration
-- Monitoring components
-- Supporting infrastructure (storage, networking)
-
-Deployment is handled via:
-
-- Docker (services)
-- Terraform (infrastructure)
-- CI/CD (optional)
-
-## ⚠️ Important
-
-This system requires input data to run the training pipeline.
-
-Before running the initial training step, make sure to:
-
-- provide raw data in data/raw/
-- ensure it matches the expected schema (see README)
-
-👉 Deployment sets up the infrastructure — it does not include data.
+* FastAPI prediction API
+* MLflow tracking & model registry
+* Prefect orchestration
+* Prometheus + Grafana monitoring
+* automated CI/CD pipelines
+* Terraform-based infrastructure provisioning
 
 ---
 
-## 📦 Requirements
+# 🏗️ Deployment Architecture
 
-Before deploying, make sure you have:
+```text
+GitHub Actions
+↓
+Container Build + Trivy Scan
+↓
+Artifact Registry
+↓
+Cloud Run Deployment
+↓
+Prediction API + MLflow
+↓
+Monitoring + Retraining Flows
+```
 
-- Docker installed
-- Terraform installed
-- Access to a cloud provider (e.g. GCP for this example)
-- Python environment for local testing
+Infrastructure components:
+
+* Cloud Run
+* Artifact Registry
+* GCS
+* GitHub Actions
+* Terraform
+* Prometheus
+* Grafana
+
+Authentication is handled via Workload Identity Federation (OIDC).
+
+No long-lived cloud credentials are stored in GitHub.
 
 ---
 
-## ⚙️ Infrastructure Setup (Terraform)
+# ☁️ Required GCP Services
 
-Navigate to the infrastructure directory:
+Enable the following APIs in GCP:
+
+* Cloud Run API
+* Artifact Registry API
+* IAM Credentials API
+* Cloud Build API
+* Secret Manager API
+* Cloud Storage API
+
+---
+
+# 📦 Requirements
+
+Before deployment, install:
+
+* Docker
+* Terraform
+* Python 3.12
+* uv
+* gcloud CLI
+
+You also need:
+
+* a GCP project
+* billing enabled
+* a configured service account
+* GitHub Actions OIDC / WIF setup
+
+---
+
+# ⚙️ Infrastructure Provisioning
+
+Terraform is used to provision the required cloud infrastructure on GCP.
+
+Provisioned resources include:
+
+* Artifact Registry repository
+* GCS bucket for model artifacts and monitoring history
+* Cloud Run services
+* IAM service account bindings
+
+## Navigate to the infrastructure directory
 
 ```bash
-cd infrastructure/
+cd infrastructure
 ```
-Create a terraform.tfvars file based on the example:
+
+## Create Terraform variables
 
 ```bash
 cp terraform.tfvars.example terraform.tfvars
 ```
 
-Initialize Terraform:
+Example Terraform variables:
+
+```hcl
+project_id          = "your-gcp-project"
+region              = "europe-west1"
+bucket_name         = "mlops-churn-bucket"
+artifact_repository = "mlops-repo"
+```
+
+## Initialize Terraform
 
 ```bash
 terraform init
 ```
 
-Preview the deployment:
+## Preview infrastructure changes
 
 ```bash
 terraform plan
 ```
 
-Apply the infrastructure:
+## Apply infrastructure
 
 ```bash
 terraform apply
 ```
 
-This will provision:
+Recommended production practices:
 
-- compute resources (e.g. VM or container runtime)
-- networking
-- storage (for data + artifacts)
-
-👉 Note: Configure your Terraform backend (e.g. remote state) and variables  
-before applying in a real cloud environment.
+* use remote Terraform state
+* enable state locking
+* avoid committing tfstate files
+* restrict IAM permissions to least privilege
 
 ---
 
-## 🐳 Service Deployment (Docker)
+# 🔐 GitHub Actions Authentication
 
-Build the services:
+CI/CD authentication is handled via:
 
-```bash
-docker-compose build
+* Workload Identity Federation (OIDC)
+* short-lived credentials
+* dedicated deployment service account
+
+Example deployment service account roles:
+
+* Cloud Run Admin
+* Artifact Registry Writer
+* Storage Admin
+* Service Account User
+
+---
+
+# 🔐 GitHub Actions Configuration
+
+Configure repository secrets in:
+
+```text
+Settings
+→ Secrets and Variables
+→ Actions
 ```
 
-Start all services:
+## Required Secrets
+
+```text
+GCP_WIF_PROVIDER
+GCP_SA_EMAIL
+API_KEY
+```
+
+## Required Variables
+
+```text
+GCP_REGION
+GCP_ARTIFACT_REPO
+MLFLOW_URL
+GCP_PROJECT_ID
+GCP_BUCKET_NAME
+```
+
+---
+
+# 🔄 CI/CD Pipeline
+
+The CI/CD pipeline is implemented with GitHub Actions.
+
+Key pipeline stages:
+
+1. Ruff linting
+2. unit + integration tests
+3. API smoke tests
+4. Docker image builds
+5. Trivy vulnerability scanning
+6. Artifact Registry push
+7. Cloud Run deployment
+
+Security highlights:
+
+* authentication via Workload Identity Federation (OIDC)
+* no long-lived GCP credentials stored in GitHub
+* deployments blocked on failed tests or critical vulnerabilities
+
+Pipeline definition:
+
+```text
+.github/workflows/main.yml
+```
+
+Deployment is triggered automatically on pushes to:
+
+```text
+main
+```
+
+---
+
+# 🚀 Deployment Flow
+
+Deployment process:
+
+1. push changes to `main`
+2. GitHub Actions runs tests and smoke tests
+3. Docker images are built
+4. Trivy vulnerability scan is executed
+5. images are pushed to Artifact Registry
+6. Cloud Run services are updated
+7. new revisions become active automatically
+
+Separate Cloud Run services are deployed for:
+
+* prediction API
+* MLflow tracking server
+
+This allows independent scaling and deployments.
+
+---
+
+# 🐳 Local Development Deployment
+
+Start all local services:
 
 ```bash
 docker-compose up -d
 ```
 
-This will launch:
+This launches:
 
-- FastAPI prediction service
-- MLflow tracking server
-- Prefect orchestration service
+* FastAPI API
+* MLflow
+* Prefect
+* PostgreSQL
+* Prometheus
+* Grafana
 
 ---
 
-## 🧠 Initial model setup
+# 🧠 Initial Model Bootstrap
 
-After the first deployment, no model is available yet.
+After deployment, the system requires an initial trained model.
 
-You need to run an initial training step to bootstrap the system:
+Run:
 
 ```bash
 make train-force
 ```
 
-This will:
+This executes:
 
-- train the first model  
-- register it in MLflow  
-- set it as the initial champion  
+* ingestion
+* validation
+* feature engineering
+* training
+* MLflow registration
+* champion model setup
 
-👉 Without this step, the API cannot serve predictions.
-
-👉 In production setups, this step is typically automated as part of a pipeline.
-
-👉 This step depends on input data.
-
-The training pipeline will automatically:
-
-- ingest raw data from data/raw/
-- validate and transform it
-- generate features and training splits
-
-👉 If no data is available, the pipeline will fail with a clear error message.
+Without this step, the API cannot serve predictions.
 
 ---
 
-## 🔁 Pipelines
+# 📊 Monitoring & Observability
 
-Once deployed, you can trigger pipelines:
+The platform provides:
 
-### Training pipeline
+* feature drift detection
+* prediction logging
+* performance monitoring
+* retraining triggers
+* operational metrics
+* Prometheus metrics
+* Grafana dashboards
 
-```bash
-python -m flows.training_flow
-```
+Monitoring configuration:
 
-### Monitoring / simulation
-
-```bash
-python scripts/run_performance_demo.py
+```text
+configs/monitoring.yaml
 ```
 
 ---
 
-## 📊 Monitoring
+# 🔁 Automated Retraining
 
-After deployment, the system provides:
+The platform supports automated retraining workflows.
 
-- model performance tracking
-- drift detection
-- alerting signals
-- retraining triggers
+Retraining flow:
 
-You can access the services locally via:
+```text
+monitoring
+↓
+Prefect retraining flow
+↓
+model training
+↓
+MLflow registration
+↓
+champion evaluation
+```
 
-- MLflow UI → http://localhost:5000  
-- Prefect UI → http://localhost:4200  
-- API → http://localhost:8000  
-- Dashboard → http://localhost:8501  
+Retraining can be triggered by:
+
+* drift thresholds
+* performance degradation
+* scheduled orchestration flows
+
+Prefect deployment configuration:
+
+```text
+prefect.yaml
+```
 
 ---
 
-## 🔐 Configuration
+# 📈 Service Endpoints
 
-Environment variables and configuration files control:
+## Prediction API
 
-- model parameters
-- thresholds (drift, performance)
-- infrastructure settings
+```text
+POST /predict
+```
 
-A `.env.example` file is provided for local setup.
+## Liveness Check
 
-Copy it with:
+```text
+GET /livez
+```
+
+## Metrics Endpoint
+
+```text
+GET /metrics
+```
+
+## Swagger UI
+
+```text
+/docs
+```
+
+---
+
+# 🌐 Live Services
+
+Add deployed service URLs here.
+
+Example:
+
+```text
+Prediction API:
+https://your-api-url
+
+Swagger:
+https://your-api-url/docs
+
+MLflow:
+https://your-mlflow-url
+
+Grafana:
+https://your-grafana-url
+```
+
+---
+
+# ⚙️ Environment Configuration
+
+Environment-specific settings are managed via:
+
+```text
+configs/dev.yaml
+configs/staging.yaml
+configs/prod.yaml
+configs/gcp.yaml
+```
+
+Environment variables are loaded from:
+
+```bash
+.env
+```
+
+Example:
 
 ```bash
 cp .env.example .env
 ```
 
-Adjust values depending on your environment.
+---
+
+# 🔒 Security
+
+Security controls included in this platform:
+
+* non-root Docker containers
+* Workload Identity Federation (OIDC)
+* vulnerability scanning with Trivy
+* smoke tests before deployment
+* isolated Cloud Run services
+* environment-based configuration
 
 ---
 
-## 🔐 GitHub Actions configuration
+# 🧪 Deployment Verification
 
-This project expects a small set of GitHub Actions secrets and variables  
-for CI/CD and cloud deployment.
+Verify the deployment after rollout.
 
-### Required GitHub Secrets
+## API health
 
-- GCP_WIF_PROVIDER  
-- GCP_SA_EMAIL  
-- API_KEY  
+```bash
+curl https://YOUR_API_URL/livez
+```
 
-### Required GitHub Variables
+## Metrics endpoint
 
-- GCP_REGION  
-- GCP_ARTIFACT_REPO  
-- MLFLOW_URL  
-- GCP_PROJECT_ID  
-- GCP_BUCKET_NAME  
+```bash
+curl https://YOUR_API_URL/metrics
+```
 
-### Security and authentication
+## Swagger UI
 
-- Workload Identity Federation (OIDC) is used to authenticate with GCP  
-- no long-lived cloud credentials are stored in GitHub  
-- only minimal application-level secrets are required  
-
-👉 This setup reduces security risks and keeps infrastructure access tightly controlled.
+```text
+https://YOUR_API_URL/docs
+```
 
 ---
 
-### How to obtain values
+# 📁 Important Directories
 
-Most required variables can be retrieved from your infrastructure setup.
-
-For example:
-
-- Terraform outputs (e.g. project ID, bucket names, regions)  
-- Cloud provider configuration (e.g. service accounts)  
-- Existing MLflow or API endpoints  
-
-👉 In a real setup, these values are typically managed via infrastructure-as-code  
-and injected into CI/CD pipelines.
+```text
+infrastructure/        Terraform infrastructure
+.github/workflows/     CI/CD pipelines
+configs/               environment configuration
+flows/                 Prefect orchestration flows
+monitoring/            Prometheus configuration
+docs/                  deployment documentation
+```
 
 ---
 
-## 🚀 CI/CD (optional)
+# 🚀 Production Notes
 
-You can automate deployment via CI/CD:
+This project is designed as a production-oriented MLOps showcase focused on:
 
-- build Docker images  
-- run tests  
-- apply Terraform  
-- deploy updated services  
-- container images are built and scanned for vulnerabilities before deployment  
-- deployments only proceed after successful build and validation
+* operational ML systems
+* cloud-native deployment
+* CI/CD automation
+* observability
+* retraining workflows
+* infrastructure reproducibility
 
-Typical flow:
-
-Commit → CI pipeline → Build → Scan → Deploy → Monitor
-
----
-
-## 🧭 Deployment Philosophy
-
-This system follows key MLOps principles:
-
-- reproducibility (versioned data + models)  
-- observability (monitoring + alerts)  
-- automation (pipelines + retraining)  
-- safety (only better models are deployed)  
-- secure-by-default deployment via automated CI/CD and vulnerability scanning
-
-👉 The goal is not just to deploy models, but to keep them reliable over time.
-
----
-
-## 📩 Questions?
-
-If you want help deploying this system in your environment:
-
-→ feel free to reach out
+The emphasis is on reliable ML operations and maintainable production systems.
