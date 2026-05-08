@@ -287,6 +287,7 @@ source = { editable = "." }
 dependencies = [
     { name = "db-dtypes" },
     { name = "fastapi" },
+    { name = "fastapi-swagger-ui-theme" },
     { name = "gcsfs" },
     { name = "gitpython" },
     { name = "google-cloud-aiplatform" },
@@ -327,6 +328,7 @@ dev = [
 requires-dist = [
     { name = "db-dtypes", specifier = ">=1.5.0" },
     { name = "fastapi", specifier = "==0.128.6" },
+    { name = "fastapi-swagger-ui-theme", specifier = ">=0.1.0" },
     { name = "gcsfs", specifier = "==2026.2.0" },
     { name = "gitpython", specifier = ">=3.1.49" },
     { name = "google-cloud-aiplatform", specifier = ">=1.139.0" },
@@ -616,6 +618,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/83/d1/195005b5e45b443e305136df47ee7df4493d782e0c039dd0d97065580324/fastapi-0.128.6.tar.gz", hash = "sha256:0cb3946557e792d731b26a42b04912f16367e3c3135ea8290f620e234f2b604f", size = 374757, upload-time = "2026-02-09T17:27:03.541Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/24/58/a2c4f6b240eeb148fb88cdac48f50a194aba760c1ca4988c6031c66a20ee/fastapi-0.128.6-py3-none-any.whl", hash = "sha256:bb1c1ef87d6086a7132d0ab60869d6f1ee67283b20fbf84ec0003bd335099509", size = 103674, upload-time = "2026-02-09T17:27:02.355Z" },
+]
+
+[[package]]
+name = "fastapi-swagger-ui-theme"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "fastapi" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b8/fe/f399e6738aff9f110444b8dbfea26eb378b1e1e9b12113db510d64e170b9/fastapi_swagger_ui_theme-0.1.0.tar.gz", hash = "sha256:0c1dfbdb83d1a189a2fca795f077e2f4789f259cf9c229e7e71d656c53d1fea5", size = 36300, upload-time = "2026-02-03T12:06:51.929Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/96/6b/708d64b24a34c8b734c1cd720035270b0708af997f2d1f01cf4806427af0/fastapi_swagger_ui_theme-0.1.0-py3-none-any.whl", hash = "sha256:30252d6473a04f0a8ac360a2b382aab90828e597083010e686ba7fa84a0d73c0", size = 37027, upload-time = "2026-02-03T12:06:50.575Z" },
 ]
 
 [[package]]
