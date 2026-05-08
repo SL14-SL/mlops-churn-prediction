@@ -368,13 +368,13 @@ Example:
 
 ```text
 Prediction API:
-https://your-api-url
+https://churn-prediction-api-5l2tmfys6q-ew.a.run.app/predict
 
 Swagger:
-https://your-api-url/docs
+https://churn-prediction-api-5l2tmfys6q-ew.a.run.app/docs
 
 MLflow:
-https://your-mlflow-url
+https://mlflow-server-1023789527988.europe-west1.run.app/
 
 Grafana:
 https://your-grafana-url

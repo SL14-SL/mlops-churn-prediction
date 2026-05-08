@@ -330,28 +330,36 @@ on every push to `main`.
 
 ---
 
-# 📈 API Endpoints
+# 📈 Live API Endpoints
 
-## Health Check
+## Swagger Documentation
 
-```bash
-GET /livez
+```text
+https://churn-prediction-api-5l2tmfys6q-ew.a.run.app/docs
 ```
 
 ---
 
-## Metrics
+## Health Endpoint
 
-```bash
-GET /metrics
+```text
+https://churn-prediction-api-5l2tmfys6q-ew.a.run.app/livez
+```
+
+---
+
+## Metrics Endpoint
+
+```text
+https://churn-prediction-api-5l2tmfys6q-ew.a.run.app/metrics
 ```
 
 ---
 
 ## Prediction Endpoint
 
-```bash
-POST /predict
+```text
+POST https://churn-prediction-api-5l2tmfys6q-ew.a.run.app/predict
 ```
 
 ---
