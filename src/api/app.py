@@ -161,8 +161,7 @@ async def custom_swagger_ui():
         openapi_url=app.openapi_url,
         title="Churn Prediction API Docs",
         swagger_css_url=(
-            "https://cdn.jsdelivr.net/npm/"
-            "swagger-ui-themes@3.0.1/themes/3.x/theme-monokai.css"
+            "https://cdn.jsdelivr.net/npm/swagger-ui-themes@3.0.1/themes/3.x/theme-feeling-blue.css"
         ),
     )
 
