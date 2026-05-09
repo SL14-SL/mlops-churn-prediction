@@ -9,19 +9,19 @@ from uuid import uuid4
 import pandas as pd
 import requests
 
-from src.configs.loader import get_path, load_config
+from src.configs.loader import ensure_dir, file_exists, get_path, load_config
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 CFG = load_config()
+RAW_DATA_PATH = get_path("raw_data")
+PREDICTIONS_PATH = get_path("predictions")
+MONITORING_PATH = get_path("monitoring")
 
-RAW_DATA_PATH = Path(get_path("raw_data"))
-PREDICTIONS_PATH = Path(get_path("predictions"))
-
-SIMULATION_FILE = RAW_DATA_PATH / "simulation_ground_truth.csv"
-INFERENCE_LOG_FILE = PREDICTIONS_PATH / "inference_log.parquet"
-PENDING_LABEL_DIR = Path(get_path("monitoring")) / "pending_labels"
+SIMULATION_FILE = f"{RAW_DATA_PATH}/simulation_ground_truth.csv"
+INFERENCE_LOG_FILE = f"{PREDICTIONS_PATH}/inference_log.parquet"
+PENDING_LABEL_DIR = f"{MONITORING_PATH}/pending_labels"
 
 API_URL = CFG["api"]["url"]
 API_KEY = os.getenv("API_KEY")
@@ -99,11 +99,11 @@ def load_logged_predictions(request_id: str, expected_rows: int) -> pd.DataFrame
         FileNotFoundError: If the inference log was not created.
         ValueError: If no matching predictions are found.
     """
-    if not INFERENCE_LOG_FILE.exists():
+    if not file_exists(INFERENCE_LOG_FILE):
         raise FileNotFoundError(f"Inference log not found: {INFERENCE_LOG_FILE}")
 
     log_df = pd.read_parquet(INFERENCE_LOG_FILE)
-
+    
     if "request_id" not in log_df.columns:
         raise KeyError("Inference log must contain `request_id`.")
 
@@ -136,8 +136,8 @@ def simulate_labeled_batch(
     The batch is removed from the simulation pool immediately, but the true
     labels are only released later by `release_churn_labels.py`.
     """
-    if not SIMULATION_FILE.exists():
-        raise FileNotFoundError(f"Simulation file not found: {SIMULATION_FILE}")
+    if not file_exists(SIMULATION_FILE):
+        raise FileNotFoundError(f"Simulation file not found: {SIMULATION_FILE}")        
 
     df = pd.read_csv(SIMULATION_FILE)
 
@@ -195,16 +195,17 @@ def simulate_labeled_batch(
     pending_df["label_created_at"] = now.isoformat()
     pending_df["pending_batch_id"] = str(uuid4())
 
-    PENDING_LABEL_DIR.mkdir(parents=True, exist_ok=True)
+    ensure_dir(PENDING_LABEL_DIR)
 
     timestamp = now.strftime("%Y%m%d_%H%M%S")
     pending_file = (
-        PENDING_LABEL_DIR
-        / f"pending_churn_day_{simulation_day:03d}_available_day_{label_available_day:03d}_{timestamp}.csv"
+        f"{PENDING_LABEL_DIR}/"
+        f"pending_churn_day_{simulation_day:03d}_"
+        f"available_day_{label_available_day:03d}_{timestamp}.csv"
     )
 
     pending_df.to_csv(pending_file, index=False)
-
+    
     remaining = df.iloc[len(batch):].copy()
     remaining.to_csv(SIMULATION_FILE, index=False)
 
