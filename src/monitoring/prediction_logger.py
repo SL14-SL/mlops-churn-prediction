@@ -18,7 +18,7 @@ PREDICTIONS = get_path("predictions")
 
 
 def _build_daily_log_path(prediction_date: str) -> str:
-    return f"{PREDICTIONS}/history/date={prediction_date}/inference_log.parquet"
+    return f"{PREDICTIONS}/history/prediction_date={prediction_date}/inference_log.parquet"
 
 
 def log_prediction(
@@ -91,6 +91,20 @@ def log_prediction(
             **metadata,
         }
         df_new = pd.DataFrame([log_data])
+
+        for col in [
+            "prediction_id",
+            "prediction_timestamp",
+            "prediction_date",
+            "environment",
+            "model_alias",
+            "model_version",
+            "model_run_id",
+            "request_id",
+            "action",
+        ]:
+            if col in df_new.columns:
+                df_new[col] = df_new[col].astype("string")
 
         # --- Legacy single-file log (keep for backward compatibility) ---
         legacy_log_file = os.path.join(PREDICTIONS, "inference_log.parquet")
