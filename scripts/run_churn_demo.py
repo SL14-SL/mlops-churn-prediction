@@ -6,27 +6,34 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.configs.loader import get_path
+from src.configs.loader import file_exists, get_path
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-RAW_DATA_PATH = Path(get_path("raw_data"))
-SIMULATION_FILE = RAW_DATA_PATH / "simulation_ground_truth.csv"
-MONITORING_PATH = Path(get_path("monitoring"))
-GROUND_TRUTH_BATCH_DIR = MONITORING_PATH / "ground_truth_batches"
+RAW_DATA_PATH = get_path("raw_data")
+SIMULATION_FILE = f"{RAW_DATA_PATH}/simulation_ground_truth.csv"
+
+MONITORING_PATH = get_path("monitoring")
+GROUND_TRUTH_BATCH_DIR = f"{MONITORING_PATH}/ground_truth_batches"
+
 
 def remaining_rows() -> int:
-    if not SIMULATION_FILE.exists():
+    if not file_exists(SIMULATION_FILE):
         return 0
     return len(pd.read_csv(SIMULATION_FILE))
 
-def has_released_labels() -> bool:
-    return (
-        GROUND_TRUTH_BATCH_DIR.exists()
-        and any(GROUND_TRUTH_BATCH_DIR.glob("ground_truth_churn*.csv"))
-    )
 
+def has_released_labels() -> bool:
+    if GROUND_TRUTH_BATCH_DIR.startswith("gs://"):
+        import gcsfs
+
+        fs = gcsfs.GCSFileSystem()
+        files = fs.glob(f"{GROUND_TRUTH_BATCH_DIR}/ground_truth_churn*.csv")
+        return len(files) > 0
+
+    path = Path(GROUND_TRUTH_BATCH_DIR)
+    return path.exists() and any(path.glob("ground_truth_churn*.csv"))
 
 def run_command(cmd: list[str], description: str) -> None:
     logger.info("🚀 %s", description)
