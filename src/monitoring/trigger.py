@@ -1,21 +1,19 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import pandas as pd
 
-from src.configs.loader import get_path, load_config
+from src.configs.loader import file_exists, get_path, load_config
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-MONITORING_PATH = Path(get_path("monitoring"))
-PERFORMANCE_HISTORY_FILE = MONITORING_PATH / "churn_performance_history.parquet"
+MONITORING_PATH = get_path("monitoring")
+PERFORMANCE_HISTORY_FILE = f"{MONITORING_PATH}/churn_performance_history.parquet"
 
 
 def load_latest_performance_row() -> pd.Series | None:
     """Load the latest churn performance monitoring row."""
-    if not PERFORMANCE_HISTORY_FILE.exists():
+    if not file_exists(PERFORMANCE_HISTORY_FILE):
         logger.info("No churn performance history found: %s", PERFORMANCE_HISTORY_FILE)
         return None
 
@@ -26,7 +24,11 @@ def load_latest_performance_row() -> pd.Series | None:
         return None
 
     if "timestamp" in df.columns:
-        df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce", utc=True)
+        df["timestamp"] = pd.to_datetime(
+            df["timestamp"],
+            errors="coerce",
+            utc=True,
+        )
         df = df.sort_values("timestamp")
 
     return df.iloc[-1]

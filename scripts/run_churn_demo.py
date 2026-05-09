@@ -101,7 +101,7 @@ def run_demo(
         )
 
         run_command(
-            ["python", "flows/auto_retrain_flow.py"],
+            ["uv", "run", "--no-sync", "python", "-m", "flows.auto_retrain_flow"],
             f"Running auto-retrain decision for day {day}",
         )
 

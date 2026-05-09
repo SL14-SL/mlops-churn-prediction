@@ -8,18 +8,18 @@ from uuid import uuid4
 
 import pandas as pd
 
-from src.configs.loader import get_path
+from src.configs.loader import ensure_dir, get_path
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-RAW_DATA_PATH = Path(get_path("raw_data"))
-MONITORING_PATH = Path(get_path("monitoring"))
+RAW_DATA_PATH = get_path("raw_data")
+MONITORING_PATH = get_path("monitoring")
 
-PENDING_LABEL_DIR = MONITORING_PATH / "pending_labels"
-GROUND_TRUTH_BATCH_DIR = MONITORING_PATH / "ground_truth_batches"
-TRAINING_BATCH_DIR = RAW_DATA_PATH / "new_batches"
-RELEASED_LABEL_DIR = MONITORING_PATH / "released_labels"
+PENDING_LABEL_DIR = f"{MONITORING_PATH}/pending_labels"
+GROUND_TRUTH_BATCH_DIR = f"{MONITORING_PATH}/ground_truth_batches"
+TRAINING_BATCH_DIR = f"{RAW_DATA_PATH}/new_batches"
+RELEASED_LABEL_DIR = f"{MONITORING_PATH}/released_labels"
 
 
 RAW_TELCO_COLUMNS = [
@@ -46,6 +46,37 @@ RAW_TELCO_COLUMNS = [
     "Churn",
 ]
 
+def is_gcs_path(path: str) -> bool:
+    return path.startswith("gs://")
+
+
+def normalize_gcs_path(path: str) -> str:
+    if path.startswith("gs://"):
+        return path
+    return f"gs://{path}"
+
+
+def list_files(directory: str, pattern: str) -> list[str]:
+    if is_gcs_path(directory):
+        import gcsfs
+
+        fs = gcsfs.GCSFileSystem()
+        return sorted(normalize_gcs_path(path) for path in fs.glob(f"{directory}/{pattern}"))
+
+    return sorted(str(path) for path in Path(directory).glob(pattern))
+
+
+def archive_file(src: str, dst: str) -> None:
+    if is_gcs_path(src) or is_gcs_path(dst):
+        import gcsfs
+
+        fs = gcsfs.GCSFileSystem()
+        fs.copy(src, dst)
+        fs.rm(src)
+        return
+
+    shutil.move(src, dst)
+
 
 def normalize_customer_id_column(df: pd.DataFrame) -> pd.DataFrame:
     """Normalize customer id column names to the raw Telco schema."""
@@ -57,14 +88,11 @@ def normalize_customer_id_column(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def list_releasable_pending_files(simulation_day: int) -> list[Path]:
+def list_releasable_pending_files(simulation_day: int) -> list[str]:
     """Return pending label files whose labels are available by this simulation day."""
-    if not PENDING_LABEL_DIR.exists():
-        return []
-
     files = []
 
-    for path in sorted(PENDING_LABEL_DIR.glob("pending_churn_day_*.csv")):
+    for path in list_files(PENDING_LABEL_DIR, "pending_churn_day_*.csv"):
         df = pd.read_csv(path, nrows=1)
 
         if "label_available_day" not in df.columns:
@@ -78,8 +106,7 @@ def list_releasable_pending_files(simulation_day: int) -> list[Path]:
 
     return files
 
-
-def release_pending_file(path: Path, simulation_day: int) -> tuple[Path, Path]:
+def release_pending_file(path: str, simulation_day: int) -> tuple[str, str]:
     """Release one pending label file into monitoring and training batch locations."""
     df = pd.read_csv(path)
     df = normalize_customer_id_column(df)
@@ -88,9 +115,9 @@ def release_pending_file(path: Path, simulation_day: int) -> tuple[Path, Path]:
     timestamp = now.strftime("%Y%m%d_%H%M%S")
     batch_id = str(uuid4())
 
-    GROUND_TRUTH_BATCH_DIR.mkdir(parents=True, exist_ok=True)
-    TRAINING_BATCH_DIR.mkdir(parents=True, exist_ok=True)
-    RELEASED_LABEL_DIR.mkdir(parents=True, exist_ok=True)
+    ensure_dir(GROUND_TRUTH_BATCH_DIR)
+    ensure_dir(TRAINING_BATCH_DIR)
+    ensure_dir(RELEASED_LABEL_DIR)
 
     monitoring_df = df.copy()
 
@@ -108,8 +135,8 @@ def release_pending_file(path: Path, simulation_day: int) -> tuple[Path, Path]:
     monitoring_df["released_simulation_day"] = simulation_day
 
     monitoring_file = (
-        GROUND_TRUTH_BATCH_DIR
-        / f"ground_truth_churn_day_{simulation_day:03d}_{timestamp}.csv"
+        f"{GROUND_TRUTH_BATCH_DIR}/"
+        f"ground_truth_churn_day_{simulation_day:03d}_{timestamp}.csv"
     )
     monitoring_df.to_csv(monitoring_file, index=False)
 
@@ -123,20 +150,19 @@ def release_pending_file(path: Path, simulation_day: int) -> tuple[Path, Path]:
         training_df["TotalCharges"] = training_df["TotalCharges"].astype(str)
 
     training_file = (
-        TRAINING_BATCH_DIR
-        / f"train_batch_churn_day_{simulation_day:03d}_{timestamp}.csv"
+        f"{TRAINING_BATCH_DIR}/"
+        f"train_batch_churn_day_{simulation_day:03d}_{timestamp}.csv"
     )
     training_df.to_csv(training_file, index=False)
 
-    released_file = RELEASED_LABEL_DIR / path.name
-    shutil.move(str(path), released_file)
+    released_file = f"{RELEASED_LABEL_DIR}/{Path(path).name}"
+    archive_file(path, released_file)
 
     logger.info("✅ Released monitoring labels: %s", monitoring_file)
     logger.info("✅ Released training batch: %s", training_file)
     logger.info("📦 Archived pending file: %s", released_file)
 
     return monitoring_file, training_file
-
 
 def main(simulation_day: int) -> None:
     """Release all labels available for the given simulation day."""

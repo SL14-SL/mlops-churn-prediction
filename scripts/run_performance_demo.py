@@ -13,22 +13,31 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 
-from src.configs.loader import get_path, load_config
+from src.configs.loader import file_exists, get_path, load_config, ensure_dir
 from src.utils.logger import get_logger
 from src.monitoring.performance import compute_business_metrics
 from src.monitoring.config import get_business_settings
 
 
 logger = get_logger(__name__)
+PREDICTIONS_PATH = get_path("predictions")
+RAW_DATA_PATH = get_path("raw_data")
+MONITORING_PATH = get_path("monitoring")
 
-PREDICTIONS_PATH = Path(get_path("predictions"))
-RAW_DATA_PATH = Path(get_path("raw_data"))
-MONITORING_PATH = Path(get_path("monitoring"))
+INFERENCE_LOG_FILE = f"{PREDICTIONS_PATH}/inference_log.parquet"
+GROUND_TRUTH_BATCH_DIR = f"{MONITORING_PATH}/ground_truth_batches"
+PERFORMANCE_HISTORY_FILE = f"{MONITORING_PATH}/churn_performance_history.parquet"
+CUMULATIVE_GT_FILE = f"{MONITORING_PATH}/cumulative_ground_truth.csv"
 
-INFERENCE_LOG_FILE = PREDICTIONS_PATH / "inference_log.parquet"
-BATCH_DIR = MONITORING_PATH / "ground_truth_batches"
-CUMULATIVE_GT_FILE = MONITORING_PATH / "cumulative_ground_truth.csv"
-PERFORMANCE_HISTORY_FILE = MONITORING_PATH / "churn_performance_history.parquet"
+def list_files(directory: str, pattern: str) -> list[str]:
+    if directory.startswith("gs://"):
+        import gcsfs
+
+        fs = gcsfs.GCSFileSystem()
+        files = fs.glob(f"{directory}/{pattern}")
+        return sorted(path if path.startswith("gs://") else f"gs://{path}" for path in files)
+
+    return sorted(str(path) for path in Path(directory).glob(pattern))
 
 
 def load_champion_decision_threshold(default: float = 0.5) -> float:
@@ -59,16 +68,8 @@ def normalize_customer_id_column(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
-
 def load_predictions() -> pd.DataFrame:
-    """
-    Load prediction logs and normalize monitoring columns.
-
-    Returns:
-        Prediction dataframe with explicit `churn_probability`,
-        `churn_prediction`, and `expected_profit` columns.
-    """
-    if not INFERENCE_LOG_FILE.exists():
+    if not file_exists(INFERENCE_LOG_FILE):
         raise FileNotFoundError(f"Prediction log not found: {INFERENCE_LOG_FILE}")
 
     df = pd.read_parquet(INFERENCE_LOG_FILE)
@@ -83,16 +84,11 @@ def load_predictions() -> pd.DataFrame:
     decision_threshold = load_champion_decision_threshold()
 
     df["churn_probability"] = pd.to_numeric(df["prediction"], errors="coerce")
-    df["churn_prediction"] = (
-        df["churn_probability"] >= decision_threshold
-    ).astype(int)
+    df["churn_prediction"] = (df["churn_probability"] >= decision_threshold).astype(int)
     df["decision_threshold"] = decision_threshold
 
     if "expected_value" in df.columns:
-        df["expected_value"] = pd.to_numeric(
-            df["expected_value"],
-            errors="coerce",
-        ).fillna(0.0)
+        df["expected_value"] = pd.to_numeric(df["expected_value"], errors="coerce").fillna(0.0)
     else:
         df["expected_value"] = 0.0
 
@@ -112,23 +108,12 @@ def load_predictions() -> pd.DataFrame:
 
     return df
 
-
 def build_cumulative_ground_truth() -> pd.DataFrame:
-    """
-    Build and persist cumulative ground truth from churn label batches.
-
-    Reads all `ground_truth_churn_*.csv` files from `data/raw/new_batches`,
-    deduplicates by `prediction_id`, and writes
-    `data/monitoring/cumulative_ground_truth.csv`.
-    """
-    if not BATCH_DIR.exists():
-        raise FileNotFoundError(f"Ground truth batch directory not found: {BATCH_DIR}")
-
-    batch_files = sorted(BATCH_DIR.glob("ground_truth_churn_*.csv"))
+    batch_files = list_files(GROUND_TRUTH_BATCH_DIR, "ground_truth_churn_*.csv")
 
     if not batch_files:
         raise FileNotFoundError(
-            f"No churn ground truth batches found in {BATCH_DIR}. "
+            f"No churn ground truth batches found in {GROUND_TRUTH_BATCH_DIR}. "
             "Run `python scripts/release_churn_labels.py --simulation-day <day>` first."
         )
 
@@ -156,7 +141,7 @@ def build_cumulative_ground_truth() -> pd.DataFrame:
 
     gt = gt.drop_duplicates(subset=["prediction_id"], keep="last")
 
-    MONITORING_PATH.mkdir(parents=True, exist_ok=True)
+    ensure_dir(MONITORING_PATH)
     gt.to_csv(CUMULATIVE_GT_FILE, index=False)
 
     logger.info("✅ Cumulative ground truth written to: %s", CUMULATIVE_GT_FILE)
@@ -266,16 +251,12 @@ def should_retrain(metrics: dict) -> tuple[bool, str]:
 
     return False, "Model performance is within thresholds."
 
-
 def append_performance_history(metrics: dict) -> pd.DataFrame:
-    """
-    Append latest metrics to churn performance history.
-    """
-    MONITORING_PATH.mkdir(parents=True, exist_ok=True)
+    ensure_dir(MONITORING_PATH)
 
     new_row = pd.DataFrame([metrics])
 
-    if PERFORMANCE_HISTORY_FILE.exists():
+    if file_exists(PERFORMANCE_HISTORY_FILE):
         history = pd.read_parquet(PERFORMANCE_HISTORY_FILE)
         history = pd.concat([history, new_row], ignore_index=True)
     else:
