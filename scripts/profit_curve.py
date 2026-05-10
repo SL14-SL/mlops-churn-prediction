@@ -1,22 +1,26 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import pandas as pd
 
-from src.configs.loader import get_path
+from src.configs.loader import ensure_dir, file_exists, get_path
 from src.monitoring.config import get_business_settings
 
 
-PREDICTIONS_PATH = Path(get_path("predictions"))
-MONITORING_PATH = Path(get_path("monitoring"))
+PREDICTIONS_PATH = get_path("predictions")
+MONITORING_PATH = get_path("monitoring")
 
-INFERENCE_LOG_FILE = PREDICTIONS_PATH / "inference_log.parquet"
-CUMULATIVE_GT_FILE = MONITORING_PATH / "cumulative_ground_truth.csv"
-OUTPUT_FILE = MONITORING_PATH / "profit_curve.parquet"
+INFERENCE_LOG_FILE = f"{PREDICTIONS_PATH}/inference_log.parquet"
+CUMULATIVE_GT_FILE = f"{MONITORING_PATH}/cumulative_ground_truth.csv"
+OUTPUT_FILE = f"{MONITORING_PATH}/profit_curve.parquet"
 
 
 def normalize_customer_id_column(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Normalize customer id column names to `customerid`.
+
+    The raw Telco dataset uses `customerID`, while prediction logs may already
+    use `customerid`. Normalizing keeps downstream joins stable.
+    """
     df = df.copy()
 
     if "customerID" in df.columns and "customerid" not in df.columns:
@@ -26,10 +30,16 @@ def normalize_customer_id_column(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def load_labeled_predictions() -> pd.DataFrame:
-    if not INFERENCE_LOG_FILE.exists():
+    """
+    Load prediction logs and cumulative ground truth labels.
+
+    Paths are kept as strings so they work for both local filesystems and
+    remote filesystems such as GCS.
+    """
+    if not file_exists(INFERENCE_LOG_FILE):
         raise FileNotFoundError(f"Prediction log not found: {INFERENCE_LOG_FILE}")
 
-    if not CUMULATIVE_GT_FILE.exists():
+    if not file_exists(CUMULATIVE_GT_FILE):
         raise FileNotFoundError(f"Ground truth file not found: {CUMULATIVE_GT_FILE}")
 
     predictions = pd.read_parquet(INFERENCE_LOG_FILE)
@@ -79,6 +89,12 @@ def choose_action(
     discount_uplift: float,
     min_expected_profit: float,
 ) -> tuple[str, float, float, float]:
+    """
+    Select the action with the highest expected value.
+
+    The decision rule remains unchanged: if the best action is below the minimum
+    expected profit threshold, no action is selected.
+    """
     send_email_ev = p * customer_value * contact_uplift - cost_contact
     offer_discount_ev = p * customer_value * discount_uplift - cost_discount
 
@@ -104,6 +120,9 @@ def simulate_profit_curve(
     df: pd.DataFrame,
     min_expected_profit_values: list[float],
 ) -> pd.DataFrame:
+    """
+    Simulate expected and realized profit over different profit thresholds.
+    """
     business_cfg = get_business_settings()
 
     rows = []
@@ -189,6 +208,12 @@ def simulate_profit_curve(
 
 
 def main() -> None:
+    """
+    Run the profit curve simulation and persist the output.
+
+    The output directory is created through the project helper so it works for
+    both local paths and GCS-backed paths.
+    """
     df = load_labeled_predictions()
 
     min_expected_profit_values = [
@@ -207,7 +232,7 @@ def main() -> None:
 
     curve = simulate_profit_curve(df, min_expected_profit_values)
 
-    MONITORING_PATH.mkdir(parents=True, exist_ok=True)
+    ensure_dir(MONITORING_PATH)
     curve.to_parquet(OUTPUT_FILE, index=False)
 
     print("PROFIT_CURVE=")

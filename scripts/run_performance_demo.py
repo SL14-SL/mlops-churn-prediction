@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from pathlib import Path
-from mlflow.tracking import MlflowClient
 
+import fsspec
+from mlflow.tracking import MlflowClient
 import pandas as pd
 from sklearn.metrics import (
     brier_score_loss,
@@ -13,10 +13,10 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 
-from src.configs.loader import file_exists, get_path, load_config, ensure_dir
-from src.utils.logger import get_logger
-from src.monitoring.performance import compute_business_metrics
+from src.configs.loader import ensure_dir, file_exists, get_path, load_config
 from src.monitoring.config import get_business_settings
+from src.monitoring.performance import compute_business_metrics
+from src.utils.logger import get_logger
 
 
 logger = get_logger(__name__)
@@ -29,15 +29,20 @@ GROUND_TRUTH_BATCH_DIR = f"{MONITORING_PATH}/ground_truth_batches"
 PERFORMANCE_HISTORY_FILE = f"{MONITORING_PATH}/churn_performance_history.parquet"
 CUMULATIVE_GT_FILE = f"{MONITORING_PATH}/cumulative_ground_truth.csv"
 
-def list_files(directory: str, pattern: str) -> list[str]:
-    if directory.startswith("gs://"):
-        import gcsfs
 
-        fs = gcsfs.GCSFileSystem()
-        files = fs.glob(f"{directory}/{pattern}")
+def list_files(directory: str, pattern: str) -> list[str]:
+    """
+    List files from a local directory or GCS path using the same pattern.
+    """
+    glob_pattern = f"{directory}/{pattern}"
+    fs, fs_pattern = fsspec.core.url_to_fs(glob_pattern)
+
+    files = fs.glob(fs_pattern)
+
+    if directory.startswith("gs://"):
         return sorted(path if path.startswith("gs://") else f"gs://{path}" for path in files)
 
-    return sorted(str(path) for path in Path(directory).glob(pattern))
+    return sorted(str(path) for path in files)
 
 
 def load_champion_decision_threshold(default: float = 0.5) -> float:
@@ -56,7 +61,8 @@ def load_champion_decision_threshold(default: float = 0.5) -> float:
             exc,
         )
         return default
-    
+
+
 def normalize_customer_id_column(df: pd.DataFrame) -> pd.DataFrame:
     """
     Normalize customer id column names to `customerid`.
@@ -67,6 +73,7 @@ def normalize_customer_id_column(df: pd.DataFrame) -> pd.DataFrame:
         df = df.rename(columns={"customerID": "customerid"})
 
     return df
+
 
 def load_predictions() -> pd.DataFrame:
     if not file_exists(INFERENCE_LOG_FILE):
@@ -107,6 +114,7 @@ def load_predictions() -> pd.DataFrame:
         )
 
     return df
+
 
 def build_cumulative_ground_truth() -> pd.DataFrame:
     batch_files = list_files(GROUND_TRUTH_BATCH_DIR, "ground_truth_churn_*.csv")
@@ -250,6 +258,7 @@ def should_retrain(metrics: dict) -> tuple[bool, str]:
         return True, f"Brier score above threshold: {metrics['brier_score']:.3f}"
 
     return False, "Model performance is within thresholds."
+
 
 def append_performance_history(metrics: dict) -> pd.DataFrame:
     ensure_dir(MONITORING_PATH)

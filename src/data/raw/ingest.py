@@ -5,7 +5,7 @@ import gcsfs
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-from src.configs.loader import get_path, load_config
+from src.configs.loader import file_exists, get_path, load_config
 from src.data.validation.validate import validate_train
 from src.utils.logger import get_logger
 
@@ -31,6 +31,30 @@ def normalize_raw_churn_schema(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def normalize_gcs_path(path: str) -> str:
+    """Ensure gcsfs paths are usable by pandas/fsspec."""
+    if path.startswith("gs://"):
+        return path
+    return f"gs://{path}"
+
+
+def list_csv_files(path: str) -> list[str]:
+    """List CSV files from either a local directory or a GCS prefix."""
+    if path.startswith("gs://"):
+        fs = gcsfs.GCSFileSystem()
+        files = fs.glob(f"{path.rstrip('/')}/*.csv")
+        return sorted(normalize_gcs_path(file_path) for file_path in files)
+
+    if not os.path.exists(path):
+        return []
+
+    return sorted(
+        os.path.join(path, filename)
+        for filename in os.listdir(path)
+        if filename.endswith(".csv")
+    )
+
+
 def ingest() -> None:
     """
     Run the churn ingestion step.
@@ -39,7 +63,6 @@ def ingest() -> None:
     validates incremental training batches, quarantines invalid local batches,
     and writes the final validated training set to parquet.
     """
-    gcp_cfg = load_config("gcp.yaml")
     training_cfg = load_config("training.yaml")
 
     raw_path = get_path("raw_data")
@@ -78,13 +101,7 @@ def ingest() -> None:
 
     sim_source_path = f"{raw_path}/simulation_ground_truth.csv"
 
-    if raw_path.startswith("gs://"):
-        fs = gcsfs.GCSFileSystem()
-        simulation_file_exists = fs.exists(sim_source_path)
-    else:
-        simulation_file_exists = os.path.exists(sim_source_path)
-
-    if not simulation_file_exists:
+    if not file_exists(sim_source_path):
         sim_truth.to_csv(sim_source_path, index=False)
         logger.info("Created simulation ground truth: %s", sim_source_path)
 
@@ -92,37 +109,26 @@ def ingest() -> None:
     batch_dir = f"{raw_path}/new_batches"
     quarantine_dir = f"{raw_path}/quarantine"
 
-    if os.path.exists(batch_dir) or raw_path.startswith("gs://"):
-        if env == "prod" or raw_path.startswith("gs://"):
-            fs = gcsfs.GCSFileSystem()
-            bucket_name = gcp_cfg["gcp"]["gcs"]["bucket_name"]
-            batch_pattern = f"gs://{bucket_name}/data/raw/new_batches/*.csv"
-            files = fs.glob(batch_pattern)
-        else:
-            files = [
-                os.path.join(batch_dir, f)
-                for f in os.listdir(batch_dir)
-                if f.endswith(".csv")
-            ]
+    files = list_csv_files(batch_dir)
 
-        for file_path in files:
-            try:
-                batch_df = pd.read_csv(file_path)
-                batch_df = normalize_raw_churn_schema(batch_df)
+    for file_path in files:
+        try:
+            batch_df = pd.read_csv(file_path)
+            batch_df = normalize_raw_churn_schema(batch_df)
 
-                validate_train(batch_df)
-                new_batches_found.append(batch_df)
+            validate_train(batch_df)
+            new_batches_found.append(batch_df)
 
-                logger.info("Batch '%s' validated.", file_path)
-            except Exception as e:
-                logger.warning("Batch '%s' rejected: %s", file_path, e)
+            logger.info("Batch '%s' validated.", file_path)
+        except Exception as e:
+            logger.warning("Batch '%s' rejected: %s", file_path, e)
 
-                if not raw_path.startswith("gs://"):
-                    os.makedirs(quarantine_dir, exist_ok=True)
-                    shutil.move(
-                        file_path,
-                        os.path.join(quarantine_dir, os.path.basename(file_path)),
-                    )
+            if not raw_path.startswith("gs://"):
+                os.makedirs(quarantine_dir, exist_ok=True)
+                shutil.move(
+                    file_path,
+                    os.path.join(quarantine_dir, os.path.basename(file_path)),
+                )
 
     if new_batches_found:
         final_train = pd.concat([train_base] + new_batches_found, ignore_index=True)

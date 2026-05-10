@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import argparse
-import shutil
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import PurePosixPath
 from uuid import uuid4
 
+import fsspec
 import pandas as pd
 
 from src.configs.loader import ensure_dir, get_path
@@ -46,6 +46,7 @@ RAW_TELCO_COLUMNS = [
     "Churn",
 ]
 
+
 def is_gcs_path(path: str) -> bool:
     return path.startswith("gs://")
 
@@ -57,25 +58,30 @@ def normalize_gcs_path(path: str) -> str:
 
 
 def list_files(directory: str, pattern: str) -> list[str]:
+    glob_pattern = f"{directory}/{pattern}"
+    fs, fs_pattern = fsspec.core.url_to_fs(glob_pattern)
+    files = fs.glob(fs_pattern)
+
     if is_gcs_path(directory):
-        import gcsfs
+        return sorted(normalize_gcs_path(path) for path in files)
 
-        fs = gcsfs.GCSFileSystem()
-        return sorted(normalize_gcs_path(path) for path in fs.glob(f"{directory}/{pattern}"))
-
-    return sorted(str(path) for path in Path(directory).glob(pattern))
+    return sorted(str(path) for path in files)
 
 
 def archive_file(src: str, dst: str) -> None:
-    if is_gcs_path(src) or is_gcs_path(dst):
-        import gcsfs
+    fs_src, src_path = fsspec.core.url_to_fs(src)
+    fs_dst, dst_path = fsspec.core.url_to_fs(dst)
 
-        fs = gcsfs.GCSFileSystem()
-        fs.copy(src, dst)
-        fs.rm(src)
+    if fs_src.protocol == fs_dst.protocol:
+        fs_src.copy(src_path, dst_path)
+        fs_src.rm(src_path)
         return
 
-    shutil.move(src, dst)
+    with fs_src.open(src_path, "rb") as fsrc:
+        with fs_dst.open(dst_path, "wb") as fdst:
+            fdst.write(fsrc.read())
+
+    fs_src.rm(src_path)
 
 
 def normalize_customer_id_column(df: pd.DataFrame) -> pd.DataFrame:
@@ -105,6 +111,7 @@ def list_releasable_pending_files(simulation_day: int) -> list[str]:
             files.append(path)
 
     return files
+
 
 def release_pending_file(path: str, simulation_day: int) -> tuple[str, str]:
     """Release one pending label file into monitoring and training batch locations."""
@@ -155,7 +162,7 @@ def release_pending_file(path: str, simulation_day: int) -> tuple[str, str]:
     )
     training_df.to_csv(training_file, index=False)
 
-    released_file = f"{RELEASED_LABEL_DIR}/{Path(path).name}"
+    released_file = f"{RELEASED_LABEL_DIR}/{PurePosixPath(path).name}"
     archive_file(path, released_file)
 
     logger.info("✅ Released monitoring labels: %s", monitoring_file)
@@ -163,6 +170,7 @@ def release_pending_file(path: str, simulation_day: int) -> tuple[str, str]:
     logger.info("📦 Archived pending file: %s", released_file)
 
     return monitoring_file, training_file
+
 
 def main(simulation_day: int) -> None:
     """Release all labels available for the given simulation day."""

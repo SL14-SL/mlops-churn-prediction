@@ -1,16 +1,25 @@
+from __future__ import annotations
+
+import json
 import sys
+
+import fsspec
 import mlflow
 
 from src.data.versioning import log_dataset_manifest_to_mlflow
-from src.training.train import train
 from src.training.evaluate import compare_models
+from src.training.train import train
 
 
-def main(manifest_path: str):
-    import json
-    from pathlib import Path
+def main(manifest_path: str) -> None:
+    """
+    Reproduce a training run from a dataset manifest.
 
-    manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+    The manifest path may point to local storage or GCS.
+    """
+    with fsspec.open(manifest_path, "r", encoding="utf-8") as f:
+        manifest = json.load(f)
+
     snapshots = manifest["snapshots"]
 
     train_file = snapshots["split_train"]

@@ -1,4 +1,5 @@
-from pathlib import Path
+from __future__ import annotations
+
 from typing import Any
 
 import numpy as np
@@ -47,9 +48,10 @@ def load_shap_background(
     """
     Load a small feature background dataset for SHAP explanations.
 
-    Uses training split features as the reference population.
+    Uses training split features as the reference population. The path is kept
+    as a string so pandas can read from local storage or GCS.
     """
-    train_path = Path(get_path("splits")) / "train.parquet"
+    train_path = f"{get_path('splits')}/train.parquet"
     df = pd.read_parquet(train_path)
 
     target_col = train_cfg["data"]["target_column"]

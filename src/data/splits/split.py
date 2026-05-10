@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-from src.configs.loader import load_config, get_path, file_exists, ensure_dir
+from src.configs.loader import ensure_dir, file_exists, get_path, load_config
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -11,10 +13,12 @@ FEATURES = get_path("features")
 SPLITS = get_path("splits")
 
 
-def split():
+def split() -> None:
     """
-    Implements a Stratified Shuffle Split to ensure balanced
-    class distribution (Churn vs No-Churn) in train and validation sets.
+    Create stratified train and validation splits.
+
+    The configured paths can point to local storage or GCS, so paths are kept
+    as strings and directory creation is handled by the project helper.
     """
     input_file = f"{FEATURES}/features.parquet"
 
@@ -56,8 +60,14 @@ def split():
     val.to_parquet(f"{SPLITS}/val.parquet", index=False)
 
     logger.info(f"Data split complete. Train rows: {len(train)} | Val rows: {len(val)}")
-    logger.info(f"Class distribution (Train):\n{train[target_column].value_counts(normalize=True)}")
-    logger.info(f"Class distribution (Val):\n{val[target_column].value_counts(normalize=True)}")
+    logger.info(
+        f"Class distribution (Train):\n"
+        f"{train[target_column].value_counts(normalize=True)}"
+    )
+    logger.info(
+        f"Class distribution (Val):\n"
+        f"{val[target_column].value_counts(normalize=True)}"
+    )
 
 
 if __name__ == "__main__":

@@ -1,18 +1,24 @@
 from __future__ import annotations
 
-from pathlib import Path
 import pandas as pd
 
-from src.configs.loader import get_path
+from src.configs.loader import ensure_dir, get_path
 
-PREDICTIONS_PATH = Path(get_path("predictions"))
-MONITORING_PATH = Path(get_path("monitoring"))
+PREDICTIONS_PATH = get_path("predictions")
+MONITORING_PATH = get_path("monitoring")
 
-INFERENCE_LOG_FILE = PREDICTIONS_PATH / "inference_log.parquet"
-CUMULATIVE_GT_FILE = MONITORING_PATH / "cumulative_ground_truth.csv"
+INFERENCE_LOG_FILE = f"{PREDICTIONS_PATH}/inference_log.parquet"
+CUMULATIVE_GT_FILE = f"{MONITORING_PATH}/cumulative_ground_truth.csv"
 
 
 def load_labeled_predictions() -> pd.DataFrame:
+    """
+    Load prediction logs and cumulative ground truth labels.
+
+    The paths may point either to the local filesystem or to a remote filesystem
+    such as GCS. Therefore, paths are kept as strings instead of pathlib.Path
+    objects.
+    """
     preds = pd.read_parquet(INFERENCE_LOG_FILE)
     gt = pd.read_csv(CUMULATIVE_GT_FILE)
 
@@ -45,18 +51,27 @@ def simulate(
     cost_contact: float = 2,
     cost_discount: float = 10,
 ) -> dict:
+    """
+    Simulate business outcomes for a given set of uplift assumptions.
+
+    The decision logic is intentionally unchanged: for every prediction, the
+    action with the highest expected value is selected unless it falls below the
+    minimum expected profit threshold.
+    """
     sim = df.copy()
 
     def decide(p):
         email_ev = p * customer_value * contact_uplift - cost_contact
         discount_ev = p * customer_value * discount_uplift - cost_discount
 
-        best = max(
-            {"send_email": email_ev, "offer_discount": discount_ev, "no_action": 0},
-            key=lambda k: {"send_email": email_ev, "offer_discount": discount_ev, "no_action": 0}[k],
-        )
+        values = {
+            "send_email": email_ev,
+            "offer_discount": discount_ev,
+            "no_action": 0,
+        }
 
-        best_val = {"send_email": email_ev, "offer_discount": discount_ev, "no_action": 0}[best]
+        best = max(values, key=values.get)
+        best_val = values[best]
 
         if best == "no_action" or best_val < min_expected_profit:
             return "no_action", 0, 0, 0
@@ -68,11 +83,16 @@ def simulate(
 
     res = sim["churn_probability"].apply(decide)
 
-    sim[["action", "ev", "cost", "uplift"]] = pd.DataFrame(res.tolist(), index=sim.index)
+    sim[["action", "ev", "cost", "uplift"]] = pd.DataFrame(
+        res.tolist(),
+        index=sim.index,
+    )
 
     actioned = sim["action"] != "no_action"
 
-    sim["realized_profit"] = sim["churn"] * customer_value * sim["uplift"] - sim["cost"]
+    sim["realized_profit"] = (
+        sim["churn"] * customer_value * sim["uplift"] - sim["cost"]
+    )
     sim.loc[~actioned, "realized_profit"] = 0
 
     return {
@@ -83,7 +103,13 @@ def simulate(
     }
 
 
-def main():
+def main() -> None:
+    """
+    Run the uplift sensitivity analysis and persist the result table.
+
+    The output directory is created through the project helper so it works for
+    both local paths and GCS-backed paths.
+    """
     df = load_labeled_predictions()
 
     results = []
@@ -101,7 +127,9 @@ def main():
     res_df = pd.DataFrame(results)
     print(res_df)
 
-    out = MONITORING_PATH / "uplift_sensitivity.csv"
+    ensure_dir(MONITORING_PATH)
+
+    out = f"{MONITORING_PATH}/uplift_sensitivity.csv"
     res_df.to_csv(out, index=False)
     print(f"\nSaved to {out}")
 

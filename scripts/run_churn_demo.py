@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import argparse
 import subprocess
-from pathlib import Path
 
+import fsspec
 import pandas as pd
 
 from src.configs.loader import file_exists, get_path
@@ -21,19 +21,23 @@ GROUND_TRUTH_BATCH_DIR = f"{MONITORING_PATH}/ground_truth_batches"
 def remaining_rows() -> int:
     if not file_exists(SIMULATION_FILE):
         return 0
+
     return len(pd.read_csv(SIMULATION_FILE))
 
 
 def has_released_labels() -> bool:
-    if GROUND_TRUTH_BATCH_DIR.startswith("gs://"):
-        import gcsfs
+    """
+    Check whether released churn label batches exist.
 
-        fs = gcsfs.GCSFileSystem()
-        files = fs.glob(f"{GROUND_TRUTH_BATCH_DIR}/ground_truth_churn*.csv")
-        return len(files) > 0
+    Uses fsspec so the same logic works for local paths and GCS paths.
+    """
+    pattern = f"{GROUND_TRUTH_BATCH_DIR}/ground_truth_churn*.csv"
 
-    path = Path(GROUND_TRUTH_BATCH_DIR)
-    return path.exists() and any(path.glob("ground_truth_churn*.csv"))
+    fs, fs_pattern = fsspec.core.url_to_fs(pattern)
+    files = fs.glob(fs_pattern)
+
+    return len(files) > 0
+
 
 def run_command(cmd: list[str], description: str) -> None:
     logger.info("🚀 %s", description)

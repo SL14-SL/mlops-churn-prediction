@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import os
 from datetime import datetime, timezone
 
 import pandas as pd
 
-from src.configs.loader import file_exists, get_path
+from src.configs.loader import ensure_dir, file_exists, get_path
 from src.monitoring.config import get_data_quality_settings
 from src.utils.logger import get_logger
 
@@ -19,13 +18,15 @@ _REFERENCE_CATEGORY_CACHE: dict[str, set[str]] = {}
 
 
 def _history_path() -> str:
+    """
+    Return the data quality history path for local storage or GCS.
+    """
     return f"{MONITORING_PATH}/data_quality_history.parquet"
 
 
 def load_reference_frame() -> pd.DataFrame:
     """
-    Loads validated training data as a reference baseline for
-    category comparison.
+    Load validated training data as reference baseline for category comparison.
     """
     path = f"{VALIDATED_PATH}/train.parquet"
 
@@ -37,11 +38,17 @@ def load_reference_frame() -> pd.DataFrame:
 
 
 def set_reference_frame_cache(ref_df: pd.DataFrame | None) -> None:
+    """
+    Set the in-memory reference dataframe cache.
+    """
     global _REFERENCE_FRAME_CACHE
     _REFERENCE_FRAME_CACHE = ref_df.copy() if ref_df is not None else pd.DataFrame()
 
 
 def get_reference_frame_cached() -> pd.DataFrame:
+    """
+    Return the cached reference dataframe, loading it if needed.
+    """
     global _REFERENCE_FRAME_CACHE
 
     if _REFERENCE_FRAME_CACHE is None:
@@ -54,6 +61,9 @@ def build_reference_category_cache(
     ref_df: pd.DataFrame,
     categorical_reference_features: list[str],
 ) -> dict[str, set[str]]:
+    """
+    Build a mapping of known category values from the reference dataset.
+    """
     cache: dict[str, set[str]] = {}
 
     if ref_df.empty:
@@ -72,11 +82,17 @@ def build_reference_category_cache(
 
 
 def set_reference_category_cache(cache: dict[str, set[str]]) -> None:
+    """
+    Set the in-memory category reference cache.
+    """
     global _REFERENCE_CATEGORY_CACHE
     _REFERENCE_CATEGORY_CACHE = cache.copy()
 
 
 def initialize_data_quality_reference_cache() -> pd.DataFrame:
+    """
+    Initialize reference dataframe and category caches for runtime checks.
+    """
     cfg = get_data_quality_settings()
     ref_df = load_reference_frame()
     set_reference_frame_cache(ref_df)
@@ -98,6 +114,9 @@ def initialize_data_quality_reference_cache() -> pd.DataFrame:
 
 
 def summarize_missingness(df: pd.DataFrame) -> dict:
+    """
+    Compute per-column missing value rates.
+    """
     metrics: dict[str, float] = {}
 
     for col in df.columns:
@@ -111,6 +130,9 @@ def summarize_unseen_categories(
     ref_df: pd.DataFrame,
     categorical_reference_features: list[str],
 ) -> dict:
+    """
+    Compare categorical values against the reference dataframe.
+    """
     metrics: dict[str, int | str] = {}
 
     if ref_df.empty:
@@ -143,6 +165,9 @@ def summarize_unseen_categories_cached(
     reference_categories: dict[str, set[str]],
     categorical_reference_features: list[str],
 ) -> dict:
+    """
+    Compare categorical values against a cached category reference map.
+    """
     metrics: dict[str, int | str] = {}
 
     if not reference_categories:
@@ -170,6 +195,9 @@ def summarize_unseen_categories_cached(
 
 
 def determine_quality_status(metrics: dict) -> str:
+    """
+    Determine the overall quality status from computed quality metrics.
+    """
     for key, value in metrics.items():
         if key.startswith("missing_rate__") and isinstance(value, float) and value > 0:
             return "warning"
@@ -185,6 +213,9 @@ def determine_quality_status(metrics: dict) -> str:
 
 
 def summarize_data_quality(df: pd.DataFrame) -> dict:
+    """
+    Summarize data quality for a dataframe using the persisted reference data.
+    """
     cfg = get_data_quality_settings()
 
     if not cfg.get("enabled", True):
@@ -222,6 +253,11 @@ def summarize_data_quality_runtime(
     df: pd.DataFrame,
     reference_categories: dict[str, set[str]] | None = None,
 ) -> dict:
+    """
+    Summarize data quality for runtime inference requests.
+
+    Runtime checks use a cached category reference map to avoid repeated reads.
+    """
     cfg = get_data_quality_settings()
 
     if not cfg.get("enabled", True):
@@ -238,7 +274,11 @@ def summarize_data_quality_runtime(
         summary["quality_status"] = "empty"
         return summary
 
-    categories = reference_categories if reference_categories is not None else _REFERENCE_CATEGORY_CACHE
+    categories = (
+        reference_categories
+        if reference_categories is not None
+        else _REFERENCE_CATEGORY_CACHE
+    )
 
     summary.update(summarize_missingness(df))
     summary.update(
@@ -256,6 +296,11 @@ def summarize_data_quality_runtime(
 
 
 def append_data_quality_history(summary: dict) -> pd.DataFrame:
+    """
+    Append a data quality summary to the quality history table.
+
+    The output path can be local or GCS-backed.
+    """
     output_path = _history_path()
 
     row = pd.DataFrame([summary])
@@ -265,8 +310,7 @@ def append_data_quality_history(summary: dict) -> pd.DataFrame:
         existing = pd.read_parquet(output_path)
         combined = pd.concat([existing, row], ignore_index=True)
     else:
-        if not output_path.startswith("gs://"):
-            os.makedirs(MONITORING_PATH, exist_ok=True)
+        ensure_dir(MONITORING_PATH)
         combined = row
 
     combined.to_parquet(output_path, index=False)
@@ -277,6 +321,9 @@ def log_data_quality_runtime(
     df: pd.DataFrame,
     reference_categories: dict[str, set[str]] | None = None,
 ) -> dict:
+    """
+    Run and log a runtime data quality check without persisting history.
+    """
     summary = summarize_data_quality_runtime(
         df=df,
         reference_categories=reference_categories,
@@ -292,6 +339,9 @@ def log_data_quality_runtime(
 
 
 def log_data_quality(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Run a data quality check and optionally persist the result.
+    """
     cfg = get_data_quality_settings()
     summary = summarize_data_quality(df)
 

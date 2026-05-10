@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import os
 from datetime import datetime, timezone
 
 import pandas as pd
 from scipy.stats import chisquare, ks_2samp
 
-from src.configs.loader import file_exists, get_path, load_config
+from src.configs.loader import ensure_dir, file_exists, get_path, load_config
 from src.monitoring.config import get_feature_drift_settings
 from src.utils.logger import get_logger
 
@@ -16,10 +15,12 @@ MONITORING_PATH = get_path("monitoring")
 PREDICTIONS_PATH = get_path("predictions")
 VALIDATED_PATH = get_path("validated_data")
 
+
 def get_feature_columns_from_training_config() -> tuple[list[str], list[str]]:
     """
     Load numeric and categorical feature columns from training.yaml.
-    Keeps feature drift monitoring aligned with the training pipeline.
+
+    This keeps feature drift monitoring aligned with the training pipeline.
     """
     training_cfg = load_config("training.yaml")
     feature_cfg = training_cfg.get("features", {})
@@ -29,14 +30,19 @@ def get_feature_columns_from_training_config() -> tuple[list[str], list[str]]:
 
     return numeric_features, categorical_features
 
+
 def _history_path() -> str:
+    """
+    Return the feature drift history path for local storage or GCS.
+    """
     return f"{MONITORING_PATH}/feature_drift_history.parquet"
 
 
 def load_reference_features() -> pd.DataFrame:
     """
-    Loads the reference dataset used as baseline for drift detection.
-    For v1 we use the validated training data snapshot.
+    Load the reference dataset used as baseline for drift detection.
+
+    For v1, the validated training data snapshot is used.
     """
     path = f"{VALIDATED_PATH}/train.parquet"
 
@@ -50,12 +56,12 @@ def load_reference_features() -> pd.DataFrame:
 
     df = pd.read_parquet(path)
     df.columns = df.columns.str.lower()
-    return df    
+    return df
 
 
 def load_current_inference_features() -> pd.DataFrame:
     """
-    Loads the current inference log as 'live' data for drift detection.
+    Load the current inference log as live data for drift detection.
     """
     path = f"{PREDICTIONS_PATH}/inference_log.parquet"
 
@@ -73,10 +79,16 @@ def load_current_inference_features() -> pd.DataFrame:
 
 
 def _safe_numeric(series: pd.Series) -> pd.Series:
+    """
+    Convert a series to numeric values and drop missing values.
+    """
     return pd.to_numeric(series, errors="coerce").dropna()
 
 
 def _safe_categorical(series: pd.Series) -> pd.Series:
+    """
+    Convert a series to categorical string values with missing placeholders.
+    """
     return series.astype(str).fillna("MISSING")
 
 
@@ -89,6 +101,9 @@ def detect_numeric_drift(
     p_value_threshold: float,
     stat_threshold: float,
 ) -> dict:
+    """
+    Detect numeric feature drift using the Kolmogorov-Smirnov test.
+    """
     ref = _safe_numeric(reference)
     cur = _safe_numeric(current)
 
@@ -131,6 +146,9 @@ def detect_categorical_drift(
     min_samples: int,
     p_value_threshold: float,
 ) -> dict:
+    """
+    Detect categorical feature drift using a chi-square goodness-of-fit test.
+    """
     ref = _safe_categorical(reference)
     cur = _safe_categorical(current)
 
@@ -179,6 +197,11 @@ def detect_categorical_drift(
 
 
 def append_feature_drift_history(results: list[dict]) -> pd.DataFrame:
+    """
+    Append feature drift results to the drift history table.
+
+    The output path can be local or GCS-backed.
+    """
     if not results:
         return pd.DataFrame()
 
@@ -192,8 +215,7 @@ def append_feature_drift_history(results: list[dict]) -> pd.DataFrame:
         existing = pd.read_parquet(output_path)
         combined = pd.concat([existing, batch_df], ignore_index=True)
     else:
-        if not output_path.startswith("gs://"):
-            os.makedirs(MONITORING_PATH, exist_ok=True)
+        ensure_dir(MONITORING_PATH)
         combined = batch_df
 
     combined.to_parquet(output_path, index=False)
@@ -201,6 +223,9 @@ def append_feature_drift_history(results: list[dict]) -> pd.DataFrame:
 
 
 def summarize_feature_drift(results_df: pd.DataFrame) -> dict:
+    """
+    Summarize feature drift results for logging and trigger checks.
+    """
     if results_df.empty:
         return {
             "checked_features": 0,
@@ -223,14 +248,13 @@ def run_feature_drift_check() -> pd.DataFrame:
 
     Uses training.yaml as the single source of truth for feature definitions.
     """
-
     cfg = get_feature_drift_settings()
 
     if not cfg.get("enabled", True):
         logger.info("Feature drift monitoring is disabled in monitoring.yaml.")
         return pd.DataFrame()
 
-    numeric_features, categorical_features = get_feature_columns_from_training_config() 
+    numeric_features, categorical_features = get_feature_columns_from_training_config()
     min_samples = int(cfg.get("min_samples", 50))
     p_value_threshold = float(cfg.get("p_value_threshold", 0.01))
     stat_threshold = float(cfg.get("stat_threshold", 0.10))
