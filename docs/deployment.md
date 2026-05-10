@@ -1,6 +1,6 @@
 # 🚀 Deployment Guide
 
-This document describes how to deploy the production-grade MLOps platform on GCP.
+This document describes how to deploy the production-grade MLOps platform on Google Cloud Platform (GCP).
 
 The platform includes:
 
@@ -11,6 +11,8 @@ The platform includes:
 * automated CI/CD pipelines
 * Terraform-based infrastructure provisioning
 
+The deployment architecture focuses on reproducibility, automation, observability and operational ML lifecycle management.
+
 ---
 
 # 🏗️ Deployment Architecture
@@ -18,22 +20,26 @@ The platform includes:
 ```text
 GitHub Actions
 ↓
-Container Build + Trivy Scan
+Linting + Tests + Smoke Tests
+↓
+Docker Build + Trivy Scan
 ↓
 Artifact Registry
 ↓
 Cloud Run Deployment
 ↓
-Prediction API + MLflow
+Prediction API + MLflow Services
 ↓
-Monitoring + Retraining Flows
+Monitoring + Drift Detection
+↓
+Automated Retraining Flows
 ```
 
 Infrastructure components:
 
 * Cloud Run
 * Artifact Registry
-* GCS
+* Google Cloud Storage
 * GitHub Actions
 * Terraform
 * Prometheus
@@ -77,7 +83,7 @@ You also need:
 
 ---
 
-# ⚙️ Infrastructure Provisioning
+# 🏗️ Infrastructure-as-Code
 
 Terraform is used to provision the required cloud infrastructure on GCP.
 
@@ -88,11 +94,15 @@ Provisioned resources include:
 * Cloud Run services
 * IAM service account bindings
 
+---
+
 ## Navigate to the infrastructure directory
 
 ```bash
 cd infrastructure
 ```
+
+---
 
 ## Create Terraform variables
 
@@ -109,17 +119,23 @@ bucket_name         = "mlops-churn-bucket"
 artifact_repository = "mlops-repo"
 ```
 
+---
+
 ## Initialize Terraform
 
 ```bash
 terraform init
 ```
 
+---
+
 ## Preview infrastructure changes
 
 ```bash
 terraform plan
 ```
+
+---
 
 ## Apply infrastructure
 
@@ -133,6 +149,8 @@ Recommended production practices:
 * enable state locking
 * avoid committing tfstate files
 * restrict IAM permissions to least privilege
+
+Terraform enables reproducible deployments across development, staging and production environments.
 
 ---
 
@@ -151,6 +169,8 @@ Example deployment service account roles:
 * Storage Admin
 * Service Account User
 
+This setup avoids storing long-lived GCP credentials inside GitHub.
+
 ---
 
 # 🔐 GitHub Actions Configuration
@@ -163,6 +183,8 @@ Settings
 → Actions
 ```
 
+---
+
 ## Required Secrets
 
 ```text
@@ -170,6 +192,8 @@ GCP_WIF_PROVIDER
 GCP_SA_EMAIL
 API_KEY
 ```
+
+---
 
 ## Required Variables
 
@@ -214,6 +238,10 @@ Deployment is triggered automatically on pushes to:
 ```text
 main
 ```
+
+<p align="center">
+  <img src="images/CI-Pipeline.png" width="100%">
+</p>
 
 ---
 
@@ -280,6 +308,25 @@ Without this step, the API cannot serve predictions.
 
 ---
 
+# 🏆 Model Registry & Promotion
+
+The deployment process integrates directly with the MLflow Model Registry.
+
+Models are versioned, promoted and loaded dynamically using champion aliases and deployment metadata.
+
+The registry architecture supports:
+
+* reproducible model deployments
+* versioned inference services
+* automated model promotion
+* rollback-ready model management
+
+<p align="center">
+  <img src="images/mlflow_model_details.png" width="90%">
+</p>
+
+---
+
 # 📊 Monitoring & Observability
 
 The platform provides:
@@ -300,9 +347,26 @@ configs/monitoring.yaml
 
 ---
 
+# 🔄 Operational Lifecycle
+
+The platform is designed around continuously operating ML systems rather than static model deployments.
+
+Operational workflow:
+
+1. models are trained and registered
+2. prediction requests are logged
+3. monitoring evaluates drift and performance
+4. delayed labels are merged into evaluation history
+5. retraining conditions are evaluated
+6. improved models are promoted automatically
+
+This architecture enables maintainable and observable ML operations in production environments.
+
+---
+
 # 🔁 Automated Retraining
 
-The platform supports automated retraining workflows.
+The platform supports automated retraining workflows orchestrated with Prefect.
 
 Retraining flow:
 
@@ -330,6 +394,10 @@ Prefect deployment configuration:
 prefect.yaml
 ```
 
+<p align="center">
+  <img src="images/prefect_flow.png" width="100%">
+</p>
+
 ---
 
 # 📈 Service Endpoints
@@ -340,17 +408,23 @@ prefect.yaml
 POST /predict
 ```
 
+---
+
 ## Liveness Check
 
 ```text
 GET /livez
 ```
 
+---
+
 ## Metrics Endpoint
 
 ```text
 GET /metrics
 ```
+
+---
 
 ## Swagger UI
 
@@ -360,25 +434,29 @@ GET /metrics
 
 ---
 
-# 🌐 Live Services
+# 🌐 Service URLs
 
-Add deployed service URLs here.
+The platform exposes the following services after deployment.
 
-Example:
+Replace `YOUR_API_URL` and `YOUR_MLFLOW_URL` with the active Cloud Run service URLs from your environment.
 
 ```text
 Prediction API:
-https://churn-prediction-api-5l2tmfys6q-ew.a.run.app/predict
+https://YOUR_API_URL/predict
 
 Swagger:
-https://churn-prediction-api-5l2tmfys6q-ew.a.run.app/docs
+https://YOUR_API_URL/docs
+
+Health:
+https://YOUR_API_URL/livez
+
+Metrics:
+https://YOUR_API_URL/metrics
 
 MLflow:
-https://mlflow-server-1023789527988.europe-west1.run.app/
-
-Grafana:
-https://your-grafana-url
+https://YOUR_MLFLOW_URL
 ```
+Note: The demo environment may require an initial training run before the API can serve predictions with a registered champion model.
 
 ---
 
@@ -387,10 +465,12 @@ https://your-grafana-url
 Environment-specific settings are managed via:
 
 ```text
+
 configs/dev.yaml
 configs/staging.yaml
 configs/prod.yaml
 configs/gcp.yaml
+
 ```
 
 Environment variables are loaded from:
@@ -417,6 +497,7 @@ Security controls included in this platform:
 * smoke tests before deployment
 * isolated Cloud Run services
 * environment-based configuration
+* least-privilege IAM configuration
 
 ---
 
@@ -424,17 +505,23 @@ Security controls included in this platform:
 
 Verify the deployment after rollout.
 
+---
+
 ## API health
 
 ```bash
 curl https://YOUR_API_URL/livez
 ```
 
+---
+
 ## Metrics endpoint
 
 ```bash
 curl https://YOUR_API_URL/metrics
 ```
+
+---
 
 ## Swagger UI
 
