@@ -471,7 +471,7 @@ with tab1:
             st.subheader("📊 Model Performance Trend")
             st.plotly_chart(
                 build_performance_history_chart(performance_history_df),
-                use_container_width=True,
+                width="stretch",
             )
 
 
@@ -485,12 +485,12 @@ with tab1:
 
         with col_left:
             st.subheader("📈 Churn Probability Distribution")
-            st.plotly_chart(build_probability_chart(prediction_df), use_container_width=True)
+            st.plotly_chart(build_probability_chart(prediction_df), width="stretch")
 
         with col_right:
             if "action" in prediction_df.columns:
                 st.subheader("🎯 Retention Actions")
-                st.plotly_chart(build_action_chart(prediction_df), use_container_width=True)
+                st.plotly_chart(build_action_chart(prediction_df), width="stretch")
             else:
                 st.info("No `action` column found in prediction log.")
 
@@ -511,7 +511,7 @@ with tab1:
             if profit_curve_df is not None and not profit_curve_df.empty:
                 st.plotly_chart(
                     build_profit_curve_chart(profit_curve_df),
-                    use_container_width=True,
+                    width="stretch",
                 )
 
                 best_realized = profit_curve_df.loc[
@@ -534,7 +534,7 @@ with tab1:
             if uplift_sensitivity_df is not None and not uplift_sensitivity_df.empty:
                 st.plotly_chart(
                     build_uplift_sensitivity_heatmap(uplift_sensitivity_df),
-                    use_container_width=True,
+                    width="stretch",
                 )
 
                 best_uplift = uplift_sensitivity_df.loc[
@@ -562,7 +562,7 @@ with tab1:
         #     st.subheader("🧾 Recent Performance History")
         #     st.dataframe(
         #         performance_history_df.tail(20),
-        #         use_container_width=True,
+        #         width="stretch",
         #         hide_index=True,
         #     )
         # else:
@@ -588,7 +588,7 @@ with tab1:
 
         # st.dataframe(
         #     prediction_df[display_cols].tail(25) if display_cols else prediction_df.tail(25),
-        #     use_container_width=True,
+        #     width="stretch",
         #     hide_index=True,
         # )
 
@@ -644,14 +644,14 @@ with tab2:
                         "Estimated Monthly Cost": lambda x: f"{x:.4f} {currency}",
                     }
                 ),
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
 
     with right:
         if not scenario_df.empty:
             chart_df = scenario_df.set_index("Scenario")[["Estimated Monthly Cost"]]
-            st.bar_chart(chart_df, use_container_width=True)
+            st.bar_chart(chart_df, width="stretch")
 
     st.divider()
     st.caption(
