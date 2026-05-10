@@ -130,6 +130,31 @@ Tracked metrics include:
 
 ---
 
+# 📈 Operational Monitoring Dashboard
+
+The platform includes a custom Streamlit monitoring dashboard for operational ML observability and business decision analytics.
+
+The dashboard combines:
+
+* model performance monitoring
+* retraining trigger visualization
+* retention action analytics
+* expected-value evaluation
+* business policy simulation
+* churn risk distribution analysis
+
+This layer demonstrates how ML systems can be monitored not only technically, but also from a business-impact perspective.
+
+<p align="center">
+  <img src="docs/images/streamlit_dashboard_overview.png" width="100%">
+</p>
+
+<p align="center">
+  <img src="docs/images/streamlit_dashboard_business.png" width="100%">
+</p>
+
+---
+
 # 🏆 Model Registry & Promotion Workflow
 
 Models are versioned and promoted through the MLflow Model Registry.
