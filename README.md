@@ -229,6 +229,23 @@ The monitoring layer continuously evaluates whether the currently deployed champ
 
 ---
 
+## 📈 Operational API Monitoring
+
+Prometheus and Grafana are used for operational API observability and runtime monitoring.
+
+Tracked metrics include:
+
+- prediction request throughput
+- p95 inference latency
+- response status distribution
+- API success rates
+
+<p align="center">
+  <img src="docs/images/grafana_dashboard.png" width="100%">
+</p>
+
+---
+
 ## 🕒 Delayed Label Handling
 
 The monitoring pipeline supports delayed ground-truth availability.
