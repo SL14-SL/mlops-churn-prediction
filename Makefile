@@ -126,6 +126,9 @@ predict-test:
 		-d '{"inputs":[{"customerID":"7590-VHVEG","gender":"Female","SeniorCitizen":0,"Partner":"Yes","Dependents":"No","tenure":1,"PhoneService":"No","MultipleLines":"No phone service","InternetService":"DSL","OnlineSecurity":"No","OnlineBackup":"Yes","DeviceProtection":"No","TechSupport":"No","StreamingTV":"No","StreamingMovies":"No","Contract":"Month-to-month","PaperlessBilling":"Yes","PaymentMethod":"Electronic check","MonthlyCharges":29.85,"TotalCharges":"29.85"}]}' \
 		| jq .
 
+demo-churn-lifecycle:
+	docker compose exec api uv run --no-sync python scripts/run_churn_demo.py --batch-size 50 --max-days 5 --label-delay-days 1
+	
 # --- Quality Assurance ---
 
 test: ## Run unit and integration tests
