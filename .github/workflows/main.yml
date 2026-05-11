@@ -12,6 +12,7 @@ concurrency:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  GIT_COMMIT_SHA: ${{ github.sha }}
 
 permissions:
   contents: read
@@ -85,7 +86,7 @@ jobs:
           name: pytest-results
           path: result.xml
 
-          # -------------------------------------------------
+  # -------------------------------------------------
 # 3️⃣ API SMOKE TEST
 # -------------------------------------------------
   smoke-test-api:
@@ -115,6 +116,7 @@ jobs:
             -e PREFECT_API_MODE=ephemeral \
             -e SMOKE_TEST=1 \
             -e MLFLOW_TRACKING_URI=http://localhost:5000 \
+            -e GIT_COMMIT_SHA=${{ github.sha }} \
             churn-api:smoke
 
       - name: Wait for liveness
@@ -255,6 +257,7 @@ jobs:
       MLFLOW_TRACKING_URI: ${{ vars.MLFLOW_URL }}
       GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
       GCS_BUCKET_NAME: ${{ vars.GCP_BUCKET_NAME }}
+      GIT_COMMIT_SHA: ${{ github.sha }}
 
     steps:
       - name: Checkout Code
@@ -290,7 +293,8 @@ jobs:
             --region "$GCP_REGION" \
             --env-from MLFLOW_TRACKING_URI \
             --env-from GCP_PROJECT_ID \
-            --env-from GCS_BUCKET_NAME
+            --env-from GCS_BUCKET_NAME \
+            --env-from GIT_COMMIT_SHA
 
 # -------------------------------------------------
 # 7️⃣ BUILD MLFLOW (Build → Scan → Push)

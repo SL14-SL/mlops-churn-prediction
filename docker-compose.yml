@@ -70,6 +70,7 @@ services:
       PYTHONPYCACHEPREFIX: /tmp/pycache
       UV_NO_SYNC: "1"
       API_KEY: ${API_KEY}
+      GIT_COMMIT_SHA: ${GIT_COMMIT_SHA:-local}
     volumes:
       - ./src:/app/src
       - ./configs:/app/configs

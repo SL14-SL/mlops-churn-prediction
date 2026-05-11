@@ -42,7 +42,10 @@ dev-up: ## Spin up the full stack (DB, MLflow, API, Prefect) in detached mode
 	mkdir -p data/validation
 	mkdir -p data/predictions/archive
 	mkdir -p data/monitoring
-	UID=$$(id -u) GID=$$(id -g) docker compose up -d --build
+	GIT_COMMIT_SHA=$$(git rev-parse HEAD 2>/dev/null || echo local) \
+	UID=$$(id -u) \
+	GID=$$(id -g) \
+	docker compose up -d --build	
 	@echo "✅ Services are live: API (8000), MLflow (5000), Prefect (4200), Grafana (3000), Prometheus(9090)"
 	#@uv run --active prefect config set PREFECT_API_URL=$(PREFECT_API_URL)
 
