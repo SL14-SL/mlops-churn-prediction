@@ -2,22 +2,9 @@
 
 End-to-end MLOps showcase for deploying, monitoring and continuously improving machine learning models in a cloud-native production-style environment.
 
-This project uses customer churn prediction as the example use case, but the architecture is designed around reusable MLOps patterns: model serving, experiment tracking, model registry workflows, monitoring, automated retraining, CI/CD and infrastructure-as-code.
+Customer churn prediction is used as the example use case, but the architecture is designed around reusable MLOps patterns: model serving, experiment tracking, model registry workflows, monitoring, automated retraining, CI/CD and infrastructure-as-code.
 
-The focus is not only model training — but the engineering layer required to operate ML systems reliably after the model has been trained.
-
-The platform combines:
-
-* FastAPI for online inference
-* MLflow for experiment tracking and model registry workflows
-* Prefect for training and retraining orchestration
-* Docker for containerized services
-* Terraform for infrastructure-as-code
-* GitHub Actions for CI/CD
-* Prometheus & Grafana for operational monitoring
-* Google Cloud Platform for cloud deployment
-
----
+The focus is not only model training, but the engineering layer required to operate ML systems reliably after the model has been trained.
 
 ![Python](https://img.shields.io/badge/Python-3.12-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-Inference_API-green)
@@ -30,20 +17,36 @@ The platform combines:
 
 # 🎯 What This Project Demonstrates
 
-This project demonstrates how to build a production-oriented ML system that goes beyond notebook-based modeling.
+This project demonstrates a production-oriented ML lifecycle beyond notebook-based modeling:
 
-It shows how to:
-
-- serve ML models through a FastAPI prediction service
-- track experiments and model lineage with MLflow
-- promote models through a champion/challenger workflow
-- orchestrate training and retraining pipelines with Prefect
-- monitor feature drift, delayed labels and model performance
-- expose operational API metrics with Prometheus and Grafana
-- convert model predictions into business actions using expected-value logic
-- deploy reproducibly with Docker, Terraform, GitHub Actions and Google Cloud Run
+- FastAPI model serving for single and batch prediction
+- MLflow experiment tracking and model registry workflows
+- Champion/challenger promotion and controlled model rollout
+- Prefect-based training and retraining orchestration
+- Feature drift, delayed-label and performance monitoring
+- Prometheus/Grafana metrics for API observability
+- Business-oriented decision logic based on churn probabilities
+- CI/CD with tests, Docker builds, Trivy scanning and Cloud Run deployment
+- Infrastructure as Code with Terraform on Google Cloud Platform
 
 The goal is to demonstrate reusable MLOps patterns for operating ML systems reliably over time.
+
+---
+
+# 🧩 Blueprint Positioning
+
+This repository is the classification and decisioning variant of a reusable MLOps blueprint.
+
+The goal is not to optimize one specific dataset, but to show how the same production-oriented ML architecture can be adapted to different machine learning problem types.
+
+| Project | Problem Type | Use Case | Main Adapted Components |
+|---|---|---|---|
+| Customer Churn MLOps | Binary Classification | Retention risk prediction | Classification metrics, churn decision logic, delayed labels |
+| Sales Forecasting MLOps | Time Series / Regression | Demand prediction | Temporal features, forecasting state, regression monitoring |
+
+The shared lifecycle is: data validation, feature engineering, training, MLflow tracking and registry, API serving, prediction logging, monitoring, retraining and CI/CD deployment.
+
+The churn use case mainly adapts the domain-specific layers: classification metrics, delayed-label evaluation, churn-risk monitoring and business-oriented retention decision logic.
 
 ---
 
@@ -56,19 +59,7 @@ The repository includes screenshots and examples for:
 - Prefect training and retraining flows
 - Streamlit dashboard for model and business monitoring
 - Grafana dashboard for API metrics
-- GitHub Actions CI/CD pipeline with tests, image build, vulnerability scan and Cloud Run deployment
-
----
-
-# ⭐ MLOps Capabilities
-
-- automated retraining workflows
-- champion/challenger model promotion
-- delayed-label evaluation
-- drift-aware monitoring
-- infrastructure-as-code deployment
-- CI/CD with security scanning
-- reproducible ML pipelines
+- GitHub Actions CI/CD pipeline
 
 ---
 
