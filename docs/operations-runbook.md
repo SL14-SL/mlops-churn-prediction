@@ -46,6 +46,7 @@ set +a
 
 export INCIDENT_ENV="prod"
 export API_BASE_URL="${PREDICTION_API_URL%/predict}"
+export MLFLOW_BASE_URL="${MLFLOW_UI_URL%/}"
 export PROMETHEUS_URL="http://localhost:9090"
 ```
 
@@ -55,12 +56,14 @@ local Prometheus URL unless cloud monitoring was deployed separately.
 Validate context:
 
 ```bash
-printf 'Environment: %s\nAPI: %s\nPrometheus: %s\n' \
+printf 'Environment: %s\nAPI: %s\nMLflow: %s\nPrometheus: %s\n' \
   "$INCIDENT_ENV" \
   "$API_BASE_URL" \
+  "$MLFLOW_BASE_URL" \
   "$PROMETHEUS_URL"
 
 test -n "$API_BASE_URL"
+test -n "$MLFLOW_BASE_URL"
 test -n "$PROMETHEUS_URL"
 ```
 
@@ -90,6 +93,69 @@ gcloud run services describe mlflow-server \
   --region "$GCP_REGION" \
   --format='yaml(metadata.name,status.url,status.traffic,status.conditions)'
 ```
+
+#### Persistent MLflow backend
+
+When tracking, registry access or model loading is affected, inspect Cloud SQL:
+
+```bash
+gcloud sql instances describe mlflow-postgres-dev \
+  --project "$GCP_PROJECT_ID" \
+  --format='yaml(
+    name,
+    state,
+    region,
+    databaseVersion,
+    connectionName,
+    settings.tier,
+    settings.activationPolicy
+  )'
+```
+
+Expected state while the demonstration is active:
+
+- the instance exists;
+- `state` is `RUNNABLE`;
+- `databaseVersion` identifies PostgreSQL;
+- `connectionName` matches the connection configured for MLflow.
+
+Check MLflow independently:
+
+```bash
+curl -i "${MLFLOW_BASE_URL}/health"
+```
+
+A successful health response does not prove that registry data is available.
+Verify the registered model and `champion` alias as well:
+
+```bash
+MLFLOW_TRACKING_URI="$MLFLOW_BASE_URL" \
+uv run --active python - <<'PY'
+from mlflow import MlflowClient
+
+client = MlflowClient()
+models = client.search_registered_models()
+
+if not models:
+    raise RuntimeError("No registered models found.")
+
+for model in models:
+    print(f"MODEL={model.name}")
+
+    for alias, version in sorted(model.aliases.items()):
+        model_version = client.get_model_version(
+            name=model.name,
+            version=version,
+        )
+        print(
+            f"  ALIAS={alias} "
+            f"VERSION={model_version.version} "
+            f"RUN_ID={model_version.run_id}"
+        )
+PY
+```
+Compare the model version and run ID with `/readyz` and the active serving
+manifest.
 
 ### 4.2 Check liveness, readiness and health
 
@@ -235,7 +301,11 @@ Potential causes:
 - missing feature schema or prediction probe;
 - checksum failure;
 - unavailable numeric model version;
-- MLflow or GCS IAM failure.
+- MLflow or GCS IAM failure;
+- the MLflow Cloud Run service cannot access Cloud SQL;
+- the registered model or numeric model version is missing;
+- Secret Manager access to the database password fails;
+- MLflow cannot access the model artifact in GCS.
 
 ### Diagnosis
 
@@ -264,6 +334,48 @@ gcloud storage cat \
 Inspect the selected manifest with `gcloud storage cat` and compare its numeric
 model version with the MLflow registry.
 
+Check the complete MLflow dependency chain:
+
+```bash
+curl -fsS "${MLFLOW_BASE_URL}/health"
+
+gcloud sql instances describe mlflow-postgres-dev \
+  --project "$GCP_PROJECT_ID" \
+  --format='value(state,connectionName,settings.activationPolicy)'
+
+gcloud run services describe mlflow-server \
+  --project "$GCP_PROJECT_ID" \
+  --region "$GCP_REGION" \
+  --format='yaml(
+    status.url,
+    status.conditions,
+    template.annotations,
+    template.containers.env
+  )'
+```
+
+Verify that:
+
+1. MLflow is healthy;
+2. Cloud SQL is running;
+3. the MLflow service references the expected Cloud SQL connection;
+4. the password is obtained through Secret Manager;
+5. the required model version exists;
+6. its artifact URI points to the expected GCS bucket;
+7. the serving manifest references the same version and run ID.
+
+Inspect recent MLflow errors:
+
+```bash
+gcloud logging read \
+  'resource.type="cloud_run_revision"
+   AND resource.labels.service_name="mlflow-server"
+   AND severity>=ERROR' \
+  --project "$GCP_PROJECT_ID" \
+  --freshness=30m \
+  --limit=100
+```
+
 ### Immediate actions
 
 If the active release is complete and accessible, reload it:
@@ -274,6 +386,12 @@ curl -fsS -X POST \
   "$API_BASE_URL/admin/reload-model" \
   | jq .
 ```
+
+- Restore Cloud SQL availability without recreating the database.
+- Verify the Terraform-managed Cloud SQL connection and Secret Manager reference.
+- Retry the bundle reload only after MLflow registry access is confirmed.
+- Prefer rollback when the active release references an unavailable model version.
+- Do not bootstrap a replacement model because of temporary registry unavailability.
 
 Never modify a published release in place.
 
@@ -300,8 +418,16 @@ curl -fsS "$API_BASE_URL/readyz" \
 
 Then execute the environment-appropriate prediction test.
 
-Escalate if multiple releases are damaged, the previous release also fails, or
-MLflow/GCS access remains unavailable.
+Escalate when:
+
+- multiple serving releases are damaged;
+- the previous release also cannot be loaded;
+- Cloud SQL reports storage, authentication or connectivity errors;
+- MLflow is healthy but registered models or aliases are missing;
+- the model version exists but its GCS artifact cannot be loaded;
+- Secret Manager or IAM changes are required;
+- recovery would require database restoration, credential rotation or
+  destructive Terraform changes.
 
 ## 7. ChurnPredictionServerErrorRateHigh
 
@@ -487,7 +613,8 @@ Close an incident only when:
 - active release lineage is recorded;
 - affected alerts return to `inactive`;
 - metrics remain stable for at least one alert window;
-- emergency Cloud Run changes are reconciled with Terraform and CI/CD.
+- emergency Cloud Run, Cloud SQL, Secret Manager or IAM changes are reconciled
+  with Terraform and CI/CD.
 
 Document:
 
@@ -495,8 +622,12 @@ Document:
 - start and end time;
 - alert and severity;
 - Cloud Run revision where applicable;
+- MLflow Cloud Run revision when tracking or model loading was affected;
+- Cloud SQL instance state and connection status;
 - release ID before and after remediation;
 - model version and run ID;
+- whether the MLflow registry and GCS artifact remained available;
+- whether Secret Manager or IAM contributed to the incident;
 - root cause;
 - actions and verification evidence;
 - application-revision or model-release rollback;

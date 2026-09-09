@@ -13,12 +13,29 @@ enterprise platform.
 
 Terraform provisions:
 
-- Artifact Registry;
+- an Artifact Registry repository;
 - a GCS artifact bucket;
-- an MLflow Cloud Run service;
+- a Cloud SQL PostgreSQL instance and MLflow database;
+- a Secret Manager secret for the MLflow database password;
+- an MLflow Cloud Run service connected to Cloud SQL;
 - the `churn-prediction-api` Cloud Run service;
 - service accounts and IAM bindings;
 - Workload Identity Federation for GitHub Actions.
+
+<p align="center">
+  <img
+    src="images/cloud_run_mlflow_cloud_sql.png"
+    width="100%"
+    alt="MLflow Cloud Run service connected to Cloud SQL and GCS"
+  >
+</p>
+
+<p align="center">
+  <em>
+    Persistent production MLflow deployment using Cloud SQL for metadata,
+    Secret Manager for credentials and GCS for model artifacts.
+  </em>
+</p>
 
 Prefect Cloud records production training flows. Prometheus, Grafana and
 Alertmanager remain part of the local operational demonstration unless a
@@ -39,8 +56,11 @@ GCP_PROJECT_ID=<project-id>
 GCP_REGION=europe-west1
 GCP_BUCKET_NAME=<artifact-bucket>
 GCP_ARTIFACT_REPO=<artifact-registry-path>
-MLFLOW_UI_URL=https://<mlflow-service>.run.app/
+MLFLOW_UI_URL=https://<mlflow-service>.run.app
+MLFLOW_TRACKING_URI=https://<mlflow-service>.run.app
+PRODUCTION_API_URL=https://<api-service>.run.app
 PREDICTION_API_URL=https://<api-service>.run.app/predict
+MLFLOW_DATABASE_INSTANCE=mlflow-postgres-dev
 ```
 
 Do not commit `.env`, API keys, Prefect keys, service-account credentials or
@@ -74,6 +94,15 @@ terraform -chdir=infrastructure validate
 terraform -chdir=infrastructure plan -out=tfplan
 terraform -chdir=infrastructure apply tfplan
 ```
+Read the generated service URLs:
+
+```bash
+terraform -chdir=infrastructure output -raw mlflow_url
+terraform -chdir=infrastructure output -raw prediction_api_url
+terraform -chdir=infrastructure output -raw artifacts_bucket_name
+```
+Store the raw URL values in `.env`. Do not include placeholder brackets,
+variable assignments from a shell command or additional quotation marks.
 
 Review replacements and deletions before applying. Confirm Cloud Run names,
 IAM targets, bucket operations and Workload Identity conditions.
@@ -103,12 +132,25 @@ Repository configuration includes:
 
 ### Variables
 
+- `DEPLOY_GCP`;
 - `GCP_PROJECT_ID`;
 - `GCP_REGION`;
 - `GCP_ARTIFACT_REPO`;
 - `GCP_BUCKET_NAME`;
-- `MLFLOW_URL` or the workflow's configured MLflow variable;
-- `PREDICTION_API_URL` where required.
+- `MLFLOW_URL`.
+
+Set `DEPLOY_GCP` to `true` only while the Terraform-managed infrastructure
+exists:
+
+```bash
+gh variable set DEPLOY_GCP --body true
+```
+
+Set it back to `false` before destroying the infrastructure: 
+
+```bash
+gh variable set DEPLOY_GCP --body false
+```
 
 The Workload Identity provider condition must reference the exact GitHub
 repository and branch, for example:
@@ -175,7 +217,7 @@ make train-bootstrap-prod
 The target:
 
 - validates the production environment;
-- prepares the temporary MLflow demo service;
+- ensures that Cloud SQL and the MLflow health endpoint are available;
 - uploads raw churn data;
 - runs training through Prefect Cloud;
 - registers the first Champion;
@@ -256,21 +298,54 @@ gcloud logging read \
   --limit=100
 ```
 
-## Cost-Conscious MLflow Configuration
+## Cost-Conscious Persistent MLflow Configuration
 
-The demo uses:
+The demonstration uses:
 
-- one MLflow application instance while active;
-- SQLite under `/tmp` as tracking backend;
-- GCS for artifacts and serving releases;
-- increased memory for MLflow registry and UI operations.
+- Cloud SQL for PostgreSQL as the persistent tracking and registry backend;
+- GCS for MLflow artifacts and immutable serving releases;
+- Secret Manager for the database password;
+- an MLflow Cloud Run service with scale-to-zero enabled;
+- a maximum of one MLflow Cloud Run instance;
+- Terraform-managed infrastructure that is destroyed after verification.
 
-SQLite under `/tmp` is ephemeral. A revision or instance replacement can remove
-the registry database even while GCS artifacts remain. A stale serving release
-cannot load a registry version that no longer exists.
+Cloud Run revision replacement does not remove MLflow experiments, registered
+models or aliases because this metadata is stored in Cloud SQL. Model artifacts
+remain independently persisted in GCS.
 
-For continuous operation, use PostgreSQL or Cloud SQL and configure a durable
-MLflow backend.
+Cloud SQL does not scale to zero and is therefore the largest ongoing cost of
+the demonstration. For this portfolio deployment, it is provisioned only for
+bootstrap, verification and evidence collection.
+
+## Verify MLflow Persistence
+
+Persistence was verified by creating a new MLflow Cloud Run revision after the
+production Champion had been registered.
+
+The verification confirmed:
+
+- the MLflow health endpoint remained available;
+- the registered churn model remained present;
+- the `champion` alias still referenced the same model version;
+- the model run ID remained unchanged;
+- the run remained in `FINISHED` state;
+- the model artifact URI still referenced GCS;
+- the production API continued to pass semantic verification.
+
+<p align="center">
+  <img
+    src="images/mlflow_persistence_verification.png"
+    width="100%"
+    alt="Successful MLflow persistence verification"
+  >
+</p>
+
+<p align="center">
+  <em>
+    Champion version, run lineage and GCS artifact location verified after
+    MLflow Cloud Run revision replacement.
+  </em>
+</p>
 
 ## Infrastructure Drift
 
@@ -286,13 +361,38 @@ terraform -chdir=infrastructure plan
 
 ## Teardown
 
+Disable GitHub cloud deployments before destroying the infrastructure:
+
+```bash
+gh variable set DEPLOY_GCP --body false
+```
+
+Review and destroy the Terraform-managed resources:
+
 ```bash
 terraform -chdir=infrastructure plan -destroy
 terraform -chdir=infrastructure destroy
+terraform -chdir=infrastructure state list
 ```
 
-Review buckets, images and externally managed resources separately. Destruction
-of cloud resources or data is irreversible.
+An empty state listing confirms that no Terraform-managed resources remain.
+The remote Terraform state bucket is retained separately because Terraform
+does not manage its own backend bucket.
+
+Verify removal of the primary billable resources:
+
+```bash
+gcloud sql instances describe mlflow-postgres-dev \
+  --project "$GCP_PROJECT_ID"
+
+gcloud artifacts repositories list \
+  --project "$GCP_PROJECT_ID" \
+  --location "$GCP_REGION"
+```
+
+A `404` response for the Cloud SQL instance is expected after successful
+destruction. Review retained state buckets separately and do not delete the
+active Terraform backend bucket.
 
 ## Related Documentation
 

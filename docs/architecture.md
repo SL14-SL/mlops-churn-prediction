@@ -32,7 +32,10 @@ flowchart TD
 | Data pipeline | Schema validation, preprocessing and feature construction | Validated data and feature tables |
 | Dataset versioning | Stable dataset identity and lineage metadata | Dataset snapshots and metadata |
 | Prefect | Training and retraining orchestration | Flow and task-run metadata |
-| MLflow | Experiments, metrics, artifacts and registered model versions | Tracking backend and artifacts |
+| MLflow | Experiments, metrics and registered model versions | Cloud SQL metadata and GCS artifacts |
+| Cloud SQL | Persistent PostgreSQL backend for MLflow | Experiments, runs, model versions and aliases |
+| GCS | MLflow artifacts, datasets and immutable serving releases | Versioned objects |
+| Secret Manager | Supplies the MLflow database password | Versioned database credential |
 | Serving release storage | Immutable manifests and inference artifacts | Versioned release directories and active pointer |
 | FastAPI | Request validation, inference and business decisions | Process-local active `ServingBundle` |
 | Prediction logger | Prediction, lineage and decision logging | Current log and date-partitioned history |
@@ -142,14 +145,37 @@ directories hold data, models, monitoring output and serving releases.
 The cloud demonstration uses:
 
 - Cloud Run for MLflow and `churn-prediction-api`;
+- Cloud SQL for PostgreSQL as the persistent MLflow tracking backend;
+- Secret Manager for the MLflow database password;
 - Artifact Registry for container images;
-- GCS for raw data, ML artifacts, dataset snapshots and serving releases;
+- GCS for raw data, MLflow artifacts, dataset snapshots and serving releases;
 - Prefect Cloud for production flow observability;
 - Terraform for provisioning;
 - GitHub Actions with Workload Identity Federation for deployment.
 
-The cost-conscious demo uses one MLflow instance with SQLite under `/tmp`.
-A continuously operated environment should use durable PostgreSQL or Cloud SQL.
+MLflow stores experiment, run, registered-model and alias metadata in Cloud
+SQL. Model artifacts remain in GCS. This separation keeps the production
+registry persistent across Cloud Run instance termination, scale-to-zero and
+revision replacement.
+
+The MLflow Cloud Run service is limited to one instance and can scale to zero.
+Cloud SQL remains the main continuously billable component and is provisioned
+only for the duration of the production demonstration.
+
+<p align="center">
+  <img
+    src="images/cloud_run_mlflow_cloud_sql.png"
+    width="100%"
+    alt="Persistent MLflow architecture on Google Cloud"
+  >
+</p>
+
+<p align="center">
+  <em>
+    MLflow on Cloud Run with Cloud SQL metadata, Secret Manager credentials
+    and GCS artifact storage.
+  </em>
+</p>
 
 ## Trust Boundaries
 

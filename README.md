@@ -85,6 +85,21 @@ Every deployable model is represented by an immutable release manifest. A releas
 - configuration hash
 - Git commit
 
+<p align="center">
+  <img
+    src="docs/images/gcs_serving_release_overview.png"
+    width="100%"
+    alt="Immutable churn serving release stored in Google Cloud Storage"
+  >
+</p>
+
+<p align="center">
+  <em>
+    Immutable production serving release containing the feature schema,
+    semantic prediction probe and versioned serving manifest.
+  </em>
+</p>
+
 The API validates the complete bundle before replacing the active serving state. A failed reload therefore keeps the previous working bundle active.
 
 This prevents partial deployments such as:
@@ -214,18 +229,34 @@ MLflow tracks parameters, metrics, artifacts and model lineage. Classification m
 
 Dataset versions, configuration hashes and Git commits connect each registered model and serving release to the code and data used to create it.
 
-The screenshots below show the reproducible local development lifecycle. The
-environment-specific `-dev` registry contains multiple retraining candidates,
-with separate Champion and Challenger aliases. Production training uses the
-same tracking, registration and promotion workflow with production-specific
-storage and service configuration.
+The screenshots below show the verified production lifecycle. MLflow stores
+experiment and registry metadata in Cloud SQL for PostgreSQL, while model
+artifacts remain in Google Cloud Storage. The registered production model uses
+a versioned `champion` alias and retains its run lineage across Cloud Run
+revision replacement.
 
 <p align="center">
-  <img src="docs/images/mlflow_run_overview.png" width="100%" alt="Local MLflow training run with classification metrics and lineage">
+  <img
+    src="docs/images/mlflow_run_overview.png"
+    width="100%"
+    alt="Production MLflow churn run with classification metrics and lineage"
+  >
 </p>
 
 <p align="center">
-  <img src="docs/images/mlflow_registered_model.png" width="100%" alt="Local MLflow registry showing multiple model versions and Champion and Challenger aliases">
+  <img
+    src="docs/images/mlflow_models_overview.png"
+    width="100%"
+    alt="Production churn run linked to its registered model artifact"
+  >
+</p>
+
+<p align="center">
+  <img
+    src="docs/images/mlflow_registered_model.png"
+    width="100%"
+    alt="Production churn model with versioned champion alias"
+  >
 </p>
 
 ---
@@ -425,10 +456,41 @@ The pipeline includes:
 
 The API image is deployed with an immutable Git SHA tag. Infrastructure is managed through Terraform.
 
+Cloud build and deployment jobs are gated by the GitHub repository variable
+`DEPLOY_GCP`. Linting, tests and the local API smoke test continue to run while
+cloud deployment is disabled.
+
+Enable cloud deployment only after Terraform has provisioned the required
+resources:
+
+```bash
+gh variable set DEPLOY_GCP --body true
+```
+
+Disable it before destroying the infrastructure:
+
+```bash
+gh variable set DEPLOY_GCP --body false
+```
+
 <p align="center">
   <img src="docs/images/ci_pipeline.png" width="100%" alt="GitHub Actions pipeline">
 </p>
 
+<p align="center">
+  <img
+    src="docs/images/cloud_run_mlflow_cloud_sql.png"
+    width="100%"
+    alt="MLflow Cloud Run service connected to Cloud SQL and GCS"
+  >
+</p>
+
+<p align="center">
+  <em>
+    MLflow on Cloud Run using Cloud SQL for persistent tracking metadata,
+    Secret Manager for database credentials and GCS for model artifacts.
+  </em>
+</p>
 ---
 
 ## 🔒 Security and Reliability
@@ -462,6 +524,8 @@ The API image is deployed with an immutable Git SHA tag. Infrastructure is manag
 
 - Docker and Docker Compose
 - PostgreSQL
+- Cloud SQL for PostgreSQL
+- Google Secret Manager
 - Prometheus
 - Grafana
 - Alertmanager
@@ -642,20 +706,41 @@ terraform -chdir=infrastructure validate
 terraform -chdir=infrastructure plan
 terraform -chdir=infrastructure apply
 ```
-### Cost-conscious MLflow demo backend
 
-The portfolio deployment intentionally runs one warm MLflow Cloud Run instance
-with an ephemeral SQLite backend under `/tmp`. Model artifacts, dataset
-snapshots and immutable serving releases remain in Google Cloud Storage.
+### Cost-conscious persistent MLflow backend
 
-This configuration keeps a temporary demonstration compact and inexpensive,
-but MLflow runs, registered model versions and aliases are not guaranteed to
-survive an instance or revision replacement. The warm instance must remain
-available while a production bootstrap or lifecycle demonstration is running.
+The Google Cloud demonstration uses a persistent MLflow architecture:
 
-A continuously operated production environment should replace SQLite with a
-durable PostgreSQL backend such as Cloud SQL and add organization-specific
-backup, recovery, networking and access-control policies.
+- MLflow runs as a Cloud Run service;
+- experiment, run and registry metadata are stored in Cloud SQL for PostgreSQL;
+- model artifacts are stored in Google Cloud Storage;
+- immutable serving releases are stored separately in GCS;
+- the database password is supplied through Secret Manager;
+- Cloud Run can scale to zero and is limited to one MLflow instance.
+
+This keeps the registered model, `champion` alias and run metadata available
+across Cloud Run instance termination and revision replacement. Persistence was
+verified by deploying a new MLflow revision and confirming that the same model
+version, run ID and GCS artifact URI remained available.
+
+Cloud SQL is the main continuously billable component. The infrastructure is
+therefore provisioned only for the production demonstration and destroyed after
+the verification evidence has been captured.
+
+<p align="center">
+  <img
+    src="docs/images/mlflow_persistence_verification.png"
+    width="100%"
+    alt="MLflow persistence verification after Cloud Run revision replacement"
+  >
+</p>
+
+<p align="center">
+  <em>
+    Registered churn model, champion version, completed run and GCS artifact
+    location verified after replacing the MLflow Cloud Run revision.
+  </em>
+</p>
 
 Required production values are loaded from `.env`, GitHub Variables and GitHub Secrets. Validate the non-secret configuration locally:
 
@@ -695,10 +780,10 @@ curl -fsS "$API_URL/health" | jq .
 `train-bootstrap-prod` is intended only for a fresh production registry. Once a
 Champion exists, use the normal production training path.
 
-Because the demonstration registry uses ephemeral SQLite storage, a new MLflow
-revision may require another explicit bootstrap. This limitation applies to the
-cost-conscious portfolio deployment, not to the recommended durable production
-architecture.
+A new MLflow Cloud Run revision does not require another bootstrap because
+registry metadata is stored persistently in Cloud SQL. Bootstrap remains
+reserved for an empty production registry.
+
 ---
 
 ## 📈 Main API Endpoints
@@ -792,7 +877,7 @@ This repository is a production-oriented portfolio blueprint, not a fully manage
 For a regulated or large-scale deployment, further controls may include:
 
 - private networking and authenticated Cloud Run ingress
-- managed relational storage for durable production MLflow state
+- automated Cloud SQL backup and disaster-recovery verification
 - centralized secret rotation
 - organization-wide audit logging
 - formal privacy and retention policies
@@ -802,9 +887,10 @@ For a regulated or large-scale deployment, further controls may include:
 
 The current cloud setup intentionally favors a compact, reproducible
 demonstration while implementing the central safety patterns of a production ML
-lifecycle. The Cloud Run deployment uses ephemeral MLflow metadata storage and
-is therefore not intended as a continuously operated registry without a durable
-PostgreSQL backend.
+lifecycle. MLflow metadata is persisted in Cloud SQL and model artifacts are
+stored in GCS. The infrastructure is nevertheless operated temporarily to limit
+ongoing costs and is not presented as a continuously operated enterprise
+platform.
 
 ---
 

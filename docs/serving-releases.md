@@ -6,6 +6,12 @@ A churn classifier depends on more than model weights. Correct decisions also
 require the matching feature schema, decision threshold, preprocessing contract
 and lineage metadata.
 
+MLflow and the serving-release repository have separate responsibilities.
+MLflow stores training lineage and registered model versions, backed by
+persistent Cloud SQL metadata and GCS model artifacts. A serving release binds
+one exact numeric model version to the matching feature schema, decision
+threshold and semantic prediction probe.
+
 Loading these values independently can create a mixed serving state. A serving
 release binds the required components into one immutable, validated unit.
 
@@ -16,6 +22,21 @@ release binds the required components into one immutable, validated unit.
 | `serving_manifest.json` | Release identity, model metadata and artifact references |
 | `feature_schema.json` | Exact feature columns, order and dtypes expected by the model |
 | `prediction_probe.json` | Representative semantic verification request |
+
+<p align="center">
+  <img
+    src="images/gcs_serving_release_overview.png"
+    width="100%"
+    alt="Immutable churn serving release in Google Cloud Storage"
+  >
+</p>
+
+<p align="center">
+  <em>
+    Versioned GCS serving release containing the feature schema,
+    prediction probe and serving manifest.
+  </em>
+</p>
 
 The manifest records:
 
@@ -32,6 +53,34 @@ The manifest records:
 
 The model itself remains an MLflow artifact. The release references the exact
 numeric registry version rather than relying on a mutable alias during load.
+
+### Model artifact lineage
+
+Candidate evaluation and production registration produce explicit MLflow run
+and model lineage. Only an accepted model is registered and assigned the
+production `champion` alias.
+
+MLflow stores experiment, run, model-version and alias metadata in Cloud SQL
+for PostgreSQL. The corresponding model artifacts remain in GCS.
+
+A serving manifest records the exact numeric model version and run ID selected
+for the release. Runtime loading therefore does not depend on later changes to
+the mutable `champion` alias.
+
+<p align="center">
+  <img
+    src="images/mlflow_models_overview.png"
+    width="100%"
+    alt="Production churn run linked to its registered model artifact"
+  >
+</p>
+
+<p align="center">
+  <em>
+    Accepted production churn run linked to the registered model version
+    referenced by the serving release.
+  </em>
+</p>
 
 ## Implementation Ownership
 
