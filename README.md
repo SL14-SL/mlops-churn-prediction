@@ -14,6 +14,16 @@ Customer churn is the example use case. The primary focus is the engineering lay
 
 ---
 
+## Project Case Study
+
+For a concise overview of the business problem, implemented solution,
+measured results and production evidence:
+
+[Download the one-page churn prediction case study (PDF)](docs/churn_prediction_case_study.pdf)
+
+---
+
+
 ## 🎯 What This Project Demonstrates
 
 This repository demonstrates a production-oriented ML lifecycle beyond notebook-based modeling:
