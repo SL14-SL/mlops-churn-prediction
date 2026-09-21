@@ -5,28 +5,26 @@ import yaml
 from dotenv import load_dotenv
 
 from mlops_churn_prediction.configs.environment import (
-    _detect_environment,
-    _inject_runtime_env,
-    _override_gcs_bucket_paths,
-    _resolve_env_placeholders,
+    detect_environment,
+    inject_runtime_env,
+    override_gcs_bucket_paths,
+    resolve_env_placeholders,
 )
 from mlops_churn_prediction.configs.paths import get_project_root
-from mlops_churn_prediction.storage.filesystem import ensure_dir, file_exists
-
-
-ensure_dir = ensure_dir
-file_exists = file_exists
+from mlops_churn_prediction.storage.filesystem import (
+    ensure_dir,
+    file_exists,
+)
 
 PROJECT_ROOT = get_project_root()
 
-# Load local environment variables, if present.
-load_dotenv(PROJECT_ROOT / ".env")
-
 
 def _load_yaml(config_path: Path) -> dict[str, Any]:
-    """Load and validate a YAML config file."""
-    if not config_path.exists():
-        raise FileNotFoundError(f"Config file not found: {config_path}")
+    """Load and validate a YAML configuration file."""
+    if not config_path.is_file():
+        raise FileNotFoundError(
+            f"Config file not found: {config_path}"
+        )
 
     with config_path.open("r", encoding="utf-8") as file:
         config = yaml.safe_load(file) or {}
@@ -39,46 +37,56 @@ def _load_yaml(config_path: Path) -> dict[str, Any]:
     return config
 
 
+def _resolve_config_filename(
+    config_name: str | None,
+    environment: str,
+) -> str:
+    """Return a safe YAML filename for the requested configuration."""
+    filename = config_name or f"{environment}.yaml"
+    candidate = Path(filename)
+
+    if candidate.name != filename:
+        raise ValueError(
+            "Config name must be a filename without directory components."
+        )
+
+    if candidate.suffix not in {".yaml", ".yml"}:
+        raise ValueError(
+            "Config name must use the .yaml or .yml extension."
+        )
+
+    return filename
+
+
 def load_config(
     config_name: str | None = None,
 ) -> dict[str, Any]:
-    """
-    Load a config file from configs/.
+    """Load and resolve a project configuration from configs/."""
+    load_dotenv(PROJECT_ROOT / ".env", override=False)
 
-    - If config_name is omitted, use <env>.yaml.
-    - Resolve environment-variable placeholders.
-    - Apply GCS bucket overrides.
-    - Inject selected service URLs into os.environ.
-    """
-    env = _detect_environment()
-    file_to_load = (
-        config_name if config_name else f"{env}.yaml"
+    environment = detect_environment()
+    filename = _resolve_config_filename(
+        config_name,
+        environment,
     )
-    config_path = (
-        PROJECT_ROOT / "configs" / file_to_load
-    )
+    config_path = PROJECT_ROOT / "configs" / filename
 
     config = _load_yaml(config_path)
-    config = _resolve_env_placeholders(config)
-    config = _override_gcs_bucket_paths(config)
+    resolved_config = resolve_env_placeholders(config)
+    resolved_config = override_gcs_bucket_paths(resolved_config)
+    resolved_config.setdefault("environment", environment)
 
-    config.setdefault("environment", env)
-
-    _inject_runtime_env(config)
-    return config
+    inject_runtime_env(resolved_config)
+    return resolved_config
 
 
 def get_path(
     name: str,
     config_name: str | None = None,
 ) -> str:
-    """
-    Return a configured path from the selected config.
-
-    Raises KeyError if paths.<name> is missing.
-    """
+    """Return a named path from the selected configuration."""
     config = load_config(config_name)
-    paths = config.get("paths", {})
+    paths = config.get("paths")
 
     if not isinstance(paths, dict):
         raise KeyError(
