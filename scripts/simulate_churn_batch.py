@@ -9,8 +9,8 @@ from uuid import uuid4
 import pandas as pd
 import requests
 
-from src.configs.loader import ensure_dir, file_exists, get_path, load_config
-from src.utils.logger import get_logger
+from mlops_churn_prediction.configs.loader import ensure_dir, file_exists, get_path, load_config
+from mlops_churn_prediction.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

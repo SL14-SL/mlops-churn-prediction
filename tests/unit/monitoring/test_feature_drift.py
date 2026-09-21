@@ -1,6 +1,6 @@
 from unittest.mock import patch
 
-from src.monitoring.feature_drift import (
+from mlops_churn_prediction.monitoring.feature_drift import (
     get_feature_columns_from_training_config,
 )
 
@@ -29,7 +29,7 @@ def test_derived_features_can_be_excluded_from_drift_monitoring():
     }
 
     with patch(
-        "src.monitoring.feature_drift.load_config",
+        "mlops_churn_prediction.monitoring.feature_drift.load_config",
         side_effect=[
             training_config,
             monitoring_config,

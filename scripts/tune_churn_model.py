@@ -14,8 +14,8 @@ from sklearn.model_selection import (
     StratifiedKFold,
 )
 
-from src.configs.loader import get_path, load_config
-from src.training.train import normalize_feature_dtypes
+from mlops_churn_prediction.configs.loader import get_path, load_config
+from mlops_churn_prediction.training.train import normalize_feature_dtypes
 
 
 TRAIN_CFG = load_config("training.yaml")

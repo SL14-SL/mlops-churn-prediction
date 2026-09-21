@@ -32,7 +32,7 @@ from scripts.run_churn_demo import (
     parse_start_at,
     run_demo,
 )
-from src.configs.loader import load_config
+from mlops_churn_prediction.configs.loader import load_config
 
 
 SCENARIO_COHORT_SHIFT = "cohort_shift"

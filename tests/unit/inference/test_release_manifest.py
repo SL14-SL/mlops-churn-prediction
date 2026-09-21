@@ -3,11 +3,11 @@ import json
 
 import pytest
 
-from src.inference.releases.manifest import (
+from mlops_churn_prediction.inference.releases.manifest import (
     parse_serving_manifest,
     resolve_release_artifact_uri,
 )
-from src.inference.serving_bundle import (
+from mlops_churn_prediction.inference.serving_bundle import (
     ServingArtifactReference,
 )
 

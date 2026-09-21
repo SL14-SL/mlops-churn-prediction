@@ -292,7 +292,7 @@ jobs:
 
       - name: Deploy API via deployment CLI
         run: |
-          uv run --active python -m src.deployment.cli deploy prediction_api --tag ${{ github.sha }} \
+          uv run --active python -m mlops_churn_prediction.deployment.cli deploy prediction_api --tag ${{ github.sha }} \
             --service-account "${{ secrets.GCP_SA_EMAIL }}" \
             --env-from APP_ENV \
             --env-from API_KEY \

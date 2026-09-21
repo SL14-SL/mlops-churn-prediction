@@ -4,7 +4,7 @@ from unittest.mock import (
 
 import pandas as pd
 
-from src.monitoring import (
+from mlops_churn_prediction.monitoring import (
     signal_collector,
 )
 

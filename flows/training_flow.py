@@ -8,7 +8,7 @@ import json
 import mlflow
 
 # --- INTERNAL CONFIG BOOTSTRAP ---
-from src.configs.loader import load_config
+from mlops_churn_prediction.configs.loader import load_config
 
 # Load config early so environment variables (Prefect, MLflow) are set
 ENV_CFG = load_config()
@@ -20,10 +20,10 @@ from prefect import flow, get_run_logger
 # --- PROJECT IMPORTS ---
 # ruff: noqa: E402
 
-from src.training.register import champion_exists
-from src.training.policy import should_refresh_api, should_skip_training, get_run_strategy
+from mlops_churn_prediction.training.register import champion_exists
+from mlops_churn_prediction.training.policy import should_refresh_api, should_skip_training, get_run_strategy
 
-from src.utils.logger import get_logger
+from mlops_churn_prediction.utils.logger import get_logger
 
 from flows.deployment_flow import deploy_and_verify_release
 from flows.tasks.serving_tasks import (

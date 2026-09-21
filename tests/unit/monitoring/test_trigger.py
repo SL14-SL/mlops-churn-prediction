@@ -2,8 +2,8 @@ from unittest.mock import (
     MagicMock,
 )
 
-from src.monitoring import trigger
-from src.monitoring.retraining_policy import (
+from mlops_churn_prediction.monitoring import trigger
+from mlops_churn_prediction.monitoring.retraining_policy import (
     RetrainingAction,
     RetrainingDecision,
 )

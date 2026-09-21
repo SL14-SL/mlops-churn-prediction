@@ -1,6 +1,6 @@
 from dataclasses import replace
 
-from src.monitoring.retraining_policy import (
+from mlops_churn_prediction.monitoring.retraining_policy import (
     RetrainingAction,
     RetrainingSignals,
     decide_retraining,

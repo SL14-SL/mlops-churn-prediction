@@ -3,7 +3,7 @@ import pytest
 from unittest.mock import MagicMock
 
 from flows import auto_retrain_flow
-from src.monitoring.retraining_policy import (
+from mlops_churn_prediction.monitoring.retraining_policy import (
     RetrainingAction,
     RetrainingDecision,
 )

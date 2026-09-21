@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 
 import pandas as pd
 
-from src.data.versioning import (
+from mlops_churn_prediction.data.versioning import (
     get_latest_dataset_manifest,
     log_dataset_manifest_to_mlflow,
     snapshot_current_datasets,
@@ -84,9 +84,9 @@ def test_snapshot_current_datasets_creates_manifest_and_files(tmp_path, monkeypa
         }
         return mapping[name]
 
-    monkeypatch.setattr("src.data.versioning.get_path", fake_get_path)
-    monkeypatch.setattr("src.data.versioning.get_git_commit", lambda: "abc123")
-    monkeypatch.setattr("src.data.versioning.get_active_config_name", lambda: "dev.yaml")
+    monkeypatch.setattr("mlops_churn_prediction.data.versioning.get_path", fake_get_path)
+    monkeypatch.setattr("mlops_churn_prediction.data.versioning.get_git_commit", lambda: "abc123")
+    monkeypatch.setattr("mlops_churn_prediction.data.versioning.get_active_config_name", lambda: "dev.yaml")
 
     manifest = snapshot_current_datasets(version_id)
 
@@ -133,7 +133,7 @@ def test_get_latest_dataset_manifest_reads_latest_file(tmp_path, monkeypatch):
         assert name == "versioning"
         return str(versioning_dir)
 
-    monkeypatch.setattr("src.data.versioning.get_path", fake_get_path)
+    monkeypatch.setattr("mlops_churn_prediction.data.versioning.get_path", fake_get_path)
 
     manifest = get_latest_dataset_manifest()
 
@@ -145,8 +145,8 @@ def test_log_dataset_manifest_to_mlflow_logs_params_and_artifact(monkeypatch):
     mock_log_param = MagicMock()
     mock_log_text = MagicMock()
 
-    monkeypatch.setattr("src.data.versioning.mlflow.log_param", mock_log_param)
-    monkeypatch.setattr("src.data.versioning.mlflow.log_text", mock_log_text)
+    monkeypatch.setattr("mlops_churn_prediction.data.versioning.mlflow.log_param", mock_log_param)
+    monkeypatch.setattr("mlops_churn_prediction.data.versioning.mlflow.log_text", mock_log_text)
 
     manifest = {
         "dataset_version": "ds_test_003",

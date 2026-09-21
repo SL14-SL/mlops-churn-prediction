@@ -5,11 +5,11 @@ from unittest.mock import (
 
 import pytest
 
-from src.inference.model_manager import (
+from mlops_churn_prediction.inference.model_manager import (
     load_serving_bundle_for_release,
     reload_serving_model,
 )
-from src.inference.serving_bundle import (
+from mlops_churn_prediction.inference.serving_bundle import (
     ServingArtifactReference,
     ServingBundle,
     ServingReleaseManifest,
@@ -66,11 +66,11 @@ def test_load_serving_bundle_for_release():
 
     with (
         patch(
-            "src.inference.model_manager."
+            "mlops_churn_prediction.inference.model_manager."
             "mlflow.set_tracking_uri",
         ),
         patch(
-            "src.inference.model_manager."
+            "mlops_churn_prediction.inference.model_manager."
             "load_serving_manifest",
             return_value=(
                 manifest,
@@ -81,7 +81,7 @@ def test_load_serving_bundle_for_release():
             ),
         ),
         patch(
-            "src.inference.model_manager."
+            "mlops_churn_prediction.inference.model_manager."
             "resolve_release_artifact_uri",
             return_value=(
                 "models/serving_releases/"
@@ -90,12 +90,12 @@ def test_load_serving_bundle_for_release():
             ),
         ) as resolve_artifact,
         patch(
-            "src.inference.model_manager."
+            "mlops_churn_prediction.inference.model_manager."
             "load_json",
             return_value=feature_schema,
         ),
         patch(
-            "src.inference.model_manager."
+            "mlops_churn_prediction.inference.model_manager."
             "load_model_by_type",
             return_value=model,
         ) as load_model,
@@ -159,11 +159,11 @@ def test_load_release_rejects_wrong_model_name():
 
     with (
         patch(
-            "src.inference.model_manager."
+            "mlops_churn_prediction.inference.model_manager."
             "mlflow.set_tracking_uri",
         ),
         patch(
-            "src.inference.model_manager."
+            "mlops_churn_prediction.inference.model_manager."
             "load_serving_manifest",
             return_value=(
                 manifest,
@@ -206,7 +206,7 @@ def test_reload_uses_active_release():
 
     with (
         patch(
-            "src.inference.model_manager."
+            "mlops_churn_prediction.inference.model_manager."
             "load_active_serving_manifest",
             return_value=(
                 manifest,
@@ -217,7 +217,7 @@ def test_reload_uses_active_release():
             ),
         ) as load_active,
         patch(
-            "src.inference.model_manager."
+            "mlops_churn_prediction.inference.model_manager."
             "load_serving_bundle_for_release",
             return_value=expected_bundle,
         ) as load_bundle,

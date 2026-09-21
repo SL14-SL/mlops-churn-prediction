@@ -5,11 +5,11 @@ from unittest.mock import (
 import pytest
 
 from flows.tasks import serving_tasks
-from src.deployment.verification import (
+from mlops_churn_prediction.deployment.verification import (
     PredictionProbeResult,
     ServingVerificationResult,
 )
-from src.inference.serving_bundle import (
+from mlops_churn_prediction.inference.serving_bundle import (
     ServingArtifactReference,
     ServingReleaseManifest,
 )

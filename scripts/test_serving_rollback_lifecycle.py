@@ -7,12 +7,12 @@ from typing import Any
 
 import requests
 
-from src.configs.loader import get_path
-from src.deployment.verification import (
+from mlops_churn_prediction.configs.loader import get_path
+from mlops_churn_prediction.deployment.verification import (
     verify_prediction_probe,
     verify_serving_release,
 )
-from src.inference.releases.repository import (
+from mlops_churn_prediction.inference.releases.repository import (
     list_serving_release_manifests,
     load_active_release_id,
     load_release_prediction_probe,

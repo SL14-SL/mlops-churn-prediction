@@ -2,8 +2,8 @@ from unittest.mock import patch
 
 import pytest
 
-import src.api.serving_state as serving_state
-from src.inference.serving_bundle import (
+import mlops_churn_prediction.api.serving_state as serving_state
+from mlops_churn_prediction.inference.serving_bundle import (
     ServingArtifactReference,
     ServingBundle,
     ServingReleaseManifest,
@@ -163,14 +163,14 @@ def mock_api_dependencies(
 
     with (
         patch(
-            "src.api.routers.prediction."
+            "mlops_churn_prediction.api.routers.prediction."
             "run_prediction_pipeline",
             return_value=(
                 mocked_pipeline_output
             ),
         ),
         patch(
-            "src.api.routers.prediction."
+            "mlops_churn_prediction.api.routers.prediction."
             "log_prediction",
         ),
     ):
@@ -387,7 +387,7 @@ def test_failed_bundle_reload_keeps_previous_serving_state(
     )
 
     with patch(
-        "src.api.serving_state."
+        "mlops_churn_prediction.api.serving_state."
         "load_current_serving_bundle",
         side_effect=RuntimeError(
             "Replacement bundle is invalid."
@@ -435,17 +435,17 @@ def test_rollback_serving_release(
 
     with (
         patch(
-            "src.api.routers.admin."
+            "mlops_churn_prediction.api.routers.admin."
             "load_active_release_id",
             return_value="release-new",
         ),
         patch(
-            "src.api.routers.admin."
+            "mlops_churn_prediction.api.routers.admin."
             "load_serving_bundle_for_release",
             return_value=rollback_bundle,
         ) as load_bundle,
         patch(
-            "src.api.routers.admin."
+            "mlops_churn_prediction.api.routers.admin."
             "activate_release_pointer",
         ) as activate_pointer,
     ):
@@ -526,19 +526,19 @@ def test_failed_rollback_keeps_previous_bundle(
 
     with (
         patch(
-            "src.api.routers.admin."
+            "mlops_churn_prediction.api.routers.admin."
             "load_active_release_id",
             return_value="release-new",
         ),
         patch(
-            "src.api.routers.admin."
+            "mlops_churn_prediction.api.routers.admin."
             "load_serving_bundle_for_release",
             side_effect=ValueError(
                 "Rollback release is invalid."
             ),
         ),
         patch(
-            "src.api.routers.admin."
+            "mlops_churn_prediction.api.routers.admin."
             "activate_release_pointer",
         ) as activate_pointer,
     ):

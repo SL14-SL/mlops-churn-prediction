@@ -64,4 +64,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 # --no-sync is CRITICAL: It tells uv NOT to re-verify or re-install the project 
 # at startup, which stops it from trying to write to the protected .venv 
 # with your host user permissions.
-CMD ["uv", "run", "--no-sync", "uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uv", "run", "--no-sync", "uvicorn", "mlops_churn_prediction.api.app:app", "--host", "0.0.0.0", "--port", "8080"]

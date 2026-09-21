@@ -1,6 +1,6 @@
 import pytest
 
-from src.inference.serving_bundle import (
+from mlops_churn_prediction.inference.serving_bundle import (
     ServingArtifactReference,
     ServingBundle,
     ServingReleaseManifest,

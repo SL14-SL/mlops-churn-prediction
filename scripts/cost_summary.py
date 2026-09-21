@@ -1,6 +1,6 @@
 import json
 
-from src.monitoring.costs import build_cost_report
+from mlops_churn_prediction.monitoring.costs import build_cost_report
 
 
 def main():

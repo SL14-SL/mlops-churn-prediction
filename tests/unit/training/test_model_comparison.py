@@ -4,7 +4,7 @@ from unittest.mock import (
 
 import pandas as pd
 
-from src.training import model_comparison
+from mlops_churn_prediction.training import model_comparison
 
 
 def build_metrics(

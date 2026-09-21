@@ -2,7 +2,7 @@ from unittest.mock import MagicMock
 
 import pandas as pd
 
-from src.training import dataset
+from mlops_churn_prediction.training import dataset
 
 
 def test_load_and_prepare_validation_data(

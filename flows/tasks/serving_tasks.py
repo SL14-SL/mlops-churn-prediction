@@ -11,22 +11,22 @@ from prefect import (
     task,
 )
 
-from src.configs.loader import (
+from mlops_churn_prediction.configs.loader import (
     get_path,
     load_config,
 )
-from src.deployment.verification import (
+from mlops_churn_prediction.deployment.verification import (
     verify_prediction_probe,
     verify_serving_release,
 )
-from src.inference.releases.repository import (
+from mlops_churn_prediction.inference.releases.repository import (
     load_active_release_id,
     load_release_prediction_probe,
     load_serving_release_manifest,
 )
 
-from src.deployment.prediction_probe import build_prediction_probe
-from src.inference.releases.publisher import publish_serving_release
+from mlops_churn_prediction.deployment.prediction_probe import build_prediction_probe
+from mlops_churn_prediction.inference.releases.publisher import publish_serving_release
 
 
 ENV_CFG = load_config()

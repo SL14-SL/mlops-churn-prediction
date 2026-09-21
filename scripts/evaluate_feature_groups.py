@@ -7,12 +7,12 @@ from sklearn.ensemble import (
     GradientBoostingClassifier,
 )
 
-from src.configs.loader import load_config
-from src.inference.decision import (
+from mlops_churn_prediction.configs.loader import load_config
+from mlops_churn_prediction.inference.decision import (
     DecisionConfig,
     DecisionEngine,
 )
-from src.monitoring.performance import (
+from mlops_churn_prediction.monitoring.performance import (
     compute_business_metrics,
 )
 

@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from src.data.features.build_features import build_features
+from mlops_churn_prediction.data.features.build_features import build_features
 
 
 @pytest.fixture

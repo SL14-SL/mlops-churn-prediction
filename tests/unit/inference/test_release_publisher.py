@@ -3,15 +3,15 @@ import json
 import pytest
 from pathlib import Path
 
-from src.inference.releases.publisher import (
+from mlops_churn_prediction.inference.releases.publisher import (
     publish_serving_release,
 )
-from src.inference.releases.repository import (
+from mlops_churn_prediction.inference.releases.repository import (
     load_active_release_id,
     load_active_serving_manifest,
     load_release_prediction_probe,
 )
-from src.inference.releases.storage import (
+from mlops_churn_prediction.inference.releases.storage import (
     build_release_paths,
 )
 

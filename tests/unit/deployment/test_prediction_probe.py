@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from src.deployment.prediction_probe import (
+from mlops_churn_prediction.deployment.prediction_probe import (
     PROBE_COLUMNS,
     build_prediction_probe,
 )

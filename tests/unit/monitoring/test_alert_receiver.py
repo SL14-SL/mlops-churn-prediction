@@ -5,7 +5,7 @@ from fastapi.testclient import (
     TestClient,
 )
 
-from src.monitoring import (
+from mlops_churn_prediction.monitoring import (
     alert_receiver,
 )
 

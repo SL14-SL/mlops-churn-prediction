@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 
-from src.data.features import pipeline
+from mlops_churn_prediction.data.features import pipeline
 
 
 def test_build_features_import_is_callable():
@@ -11,10 +11,10 @@ def test_build_features_import_is_callable():
     assert callable(pipeline.build_features)
 
 
-@patch("src.data.features.pipeline.os.makedirs")
-@patch("src.data.features.pipeline.build_features")
-@patch("src.data.features.pipeline.pd.read_parquet")
-@patch("src.data.features.pipeline.file_exists")
+@patch("mlops_churn_prediction.data.features.pipeline.os.makedirs")
+@patch("mlops_churn_prediction.data.features.pipeline.build_features")
+@patch("mlops_churn_prediction.data.features.pipeline.pd.read_parquet")
+@patch("mlops_churn_prediction.data.features.pipeline.file_exists")
 def test_run_feature_pipeline_local_success(
     mock_file_exists,
     mock_read_parquet,
@@ -43,11 +43,11 @@ def test_run_feature_pipeline_local_success(
 
     with (
         patch(
-            "src.data.features.pipeline.VALIDATED_PATH",
+            "mlops_churn_prediction.data.features.pipeline.VALIDATED_PATH",
             "data/validation",
         ),
         patch(
-            "src.data.features.pipeline.FEATURES_PATH",
+            "mlops_churn_prediction.data.features.pipeline.FEATURES_PATH",
             "data/features",
         ),
     ):
@@ -73,8 +73,8 @@ def test_run_feature_pipeline_local_success(
     )
 
 
-@patch("src.data.features.pipeline.pd.read_parquet")
-@patch("src.data.features.pipeline.file_exists")
+@patch("mlops_churn_prediction.data.features.pipeline.pd.read_parquet")
+@patch("mlops_churn_prediction.data.features.pipeline.file_exists")
 def test_run_feature_pipeline_missing_validated_data(
     mock_file_exists,
     mock_read_parquet,
@@ -83,7 +83,7 @@ def test_run_feature_pipeline_missing_validated_data(
     mock_file_exists.return_value = False
 
     with patch(
-        "src.data.features.pipeline.VALIDATED_PATH",
+        "mlops_churn_prediction.data.features.pipeline.VALIDATED_PATH",
         "data/validation",
     ):
         with pytest.raises(
@@ -104,10 +104,10 @@ def test_run_feature_pipeline_missing_validated_data(
     mock_read_parquet.assert_not_called()
 
 
-@patch("src.data.features.pipeline.os.makedirs")
-@patch("src.data.features.pipeline.build_features")
-@patch("src.data.features.pipeline.pd.read_parquet")
-@patch("src.data.features.pipeline.file_exists")
+@patch("mlops_churn_prediction.data.features.pipeline.os.makedirs")
+@patch("mlops_churn_prediction.data.features.pipeline.build_features")
+@patch("mlops_churn_prediction.data.features.pipeline.pd.read_parquet")
+@patch("mlops_churn_prediction.data.features.pipeline.file_exists")
 def test_run_feature_pipeline_gcs_output(
     mock_file_exists,
     mock_read_parquet,
@@ -136,11 +136,11 @@ def test_run_feature_pipeline_gcs_output(
 
     with (
         patch(
-            "src.data.features.pipeline.VALIDATED_PATH",
+            "mlops_churn_prediction.data.features.pipeline.VALIDATED_PATH",
             "gs://test-bucket/validation",
         ),
         patch(
-            "src.data.features.pipeline.FEATURES_PATH",
+            "mlops_churn_prediction.data.features.pipeline.FEATURES_PATH",
             "gs://test-bucket/features",
         ),
     ):

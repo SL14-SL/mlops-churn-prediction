@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.configs.loader import (
+from mlops_churn_prediction.configs.loader import (
     file_exists,
     get_path,
 )

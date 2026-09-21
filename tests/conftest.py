@@ -13,7 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import MagicMock
 
-from src.api.app import app
+from mlops_churn_prediction.api.app import app
 
 @pytest.fixture
 def sample_churn_customer():

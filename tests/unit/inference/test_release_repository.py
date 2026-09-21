@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from src.inference.releases.repository import (
+from mlops_churn_prediction.inference.releases.repository import (
     activate_release_pointer,
     list_serving_release_manifests,
     load_active_release_id,
@@ -10,7 +10,7 @@ from src.inference.releases.repository import (
     load_release_prediction_probe,
     load_serving_manifest,
 )
-from src.inference.releases.storage import (
+from mlops_churn_prediction.inference.releases.storage import (
     build_release_paths,
     sha256_uri,
     write_json,
