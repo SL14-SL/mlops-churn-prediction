@@ -1,25 +1,24 @@
 import logging
 import sys
 
-def get_logger(name: str):
-    """
-    Configures a standardized logger for the project.
-    Outputs to stdout so it can be captured by Docker, Cloud Run, or Prefect.
-    """
+_LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+
+
+def get_logger(name: str, level: int = logging.INFO) -> logging.Logger:
+    """Return a logger configured for containerized application output."""
     logger = logging.getLogger(name)
-    
-    # Prevent adding multiple handlers if logger is called multiple times
+    logger.setLevel(level)
+
     if not logger.handlers:
-        logger.setLevel(logging.INFO)
-        
-        # Format: Timestamp - Module - Level - Message
         formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
+            _LOG_FORMAT,
+            datefmt=_DATE_FORMAT,
         )
-        
+
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setFormatter(formatter)
         logger.addHandler(console_handler)
-        
+
+    logger.propagate = False
     return logger
