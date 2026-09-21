@@ -14,6 +14,9 @@ from mlops_churn_prediction.configs.loader import (
 )
 from mlops_churn_prediction.storage.filesystem import file_exists
 from mlops_churn_prediction.configs.paths import join_uri
+from mlops_churn_prediction.data.contracts import (
+    DatasetCollection,
+)
 from mlops_churn_prediction.data.validation.validate import (
     validate_train,
 )
@@ -554,13 +557,16 @@ def persist_validated_dataset(
     return output_path
 
 
-def ingest() -> None:
+def ingest() -> DatasetCollection:
     """
     Execute the complete churn-data ingestion lifecycle.
 
     The lifecycle loads and validates canonical Telco data, creates a
     deterministic simulation partition, integrates valid incremental batches
     and persists the canonical training dataset for feature generation.
+
+    Returns:
+        The validated training dataset and ingestion metadata.
     """
     training_config = load_config(
         "training.yaml"
@@ -649,9 +655,7 @@ def ingest() -> None:
 
     persist_validated_dataset(
         final_train,
-        validated_path=(
-            validated_path
-        ),
+        validated_path=validated_path,
     )
 
     logger.info(
@@ -659,6 +663,18 @@ def ingest() -> None:
         "rows=%s | output=%s",
         len(final_train),
         validated_path,
+    )
+
+    return DatasetCollection(
+        datasets={
+            "train": final_train,
+        },
+        metadata={
+            "source": raw_path,
+            "validated_path": validated_path,
+            "environment": environment,
+            "incremental_batch_count": len(batches),
+        },
     )
 
 
