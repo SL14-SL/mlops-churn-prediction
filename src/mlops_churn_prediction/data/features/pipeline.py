@@ -1,9 +1,27 @@
+from __future__ import annotations
+
 import os
+from collections.abc import Mapping
+from typing import Any
+
 import pandas as pd
-from mlops_churn_prediction.configs.loader import get_path, load_config
-from mlops_churn_prediction.storage.filesystem import file_exists
-from mlops_churn_prediction.utils.logger import get_logger
-from mlops_churn_prediction.data.features.build_features import build_features
+
+from mlops_churn_prediction.configs.loader import (
+    get_path,
+    load_config,
+)
+from mlops_churn_prediction.data.contracts import (
+    DatasetCollection,
+)
+from mlops_churn_prediction.data.features.build_features import (
+    build_features,
+)
+from mlops_churn_prediction.storage.filesystem import (
+    file_exists,
+)
+from mlops_churn_prediction.utils.logger import (
+    get_logger,
+)
 
 logger = get_logger(__name__)
 
@@ -11,37 +29,96 @@ TRAIN_CFG = load_config("training.yaml")
 FEATURES_PATH = get_path("features")
 VALIDATED_PATH = get_path("validated_data")
 
+TRAIN_DATASET_NAME = "train"
 
-def run_feature_pipeline(config: dict | None = None) -> None:
-    """
-    End-to-end pipeline: Load validated data -> Build features -> Save.
-    """
-    config = TRAIN_CFG if config is None else config
-    logger.info(f"Starting feature pipeline. Data source: {VALIDATED_PATH}")
+
+def build_feature_table(
+    datasets: DatasetCollection,
+    config: Mapping[str, Any],
+) -> pd.DataFrame:
+    """Build the churn feature table from ingested datasets."""
+    training_dataset = datasets.require(
+        TRAIN_DATASET_NAME
+    )
+
+    return build_features(
+        training_dataset,
+        config=dict(config),
+    )
+
+
+def run_feature_pipeline(
+    config: Mapping[str, Any] | None = None,
+) -> None:
+    """Load validated data, build features and persist the result."""
+    resolved_config = (
+        TRAIN_CFG
+        if config is None
+        else config
+    )
+
+    logger.info(
+        "Starting feature pipeline | source=%s",
+        VALIDATED_PATH,
+    )
 
     try:
-        # 1. Load validated data 
-        train_path = f"{VALIDATED_PATH}/train.parquet"
+        train_path = (
+            f"{VALIDATED_PATH}/train.parquet"
+        )
+
         if not file_exists(train_path):
-            raise FileNotFoundError(f"Validated data not found at {train_path}")
-        
-        df = pd.read_parquet(train_path)
+            raise FileNotFoundError(
+                "Validated data not found at "
+                f"{train_path}"
+            )
 
-        # 2. Transform data
-        df = build_features(df, config=config)
+        training_dataset = pd.read_parquet(
+            train_path
+        )
+        datasets = DatasetCollection(
+            datasets={
+                TRAIN_DATASET_NAME: (
+                    training_dataset
+                ),
+            }
+        )
 
-        # 3. Save feature set
-        if not FEATURES_PATH.startswith("gs://"):
-            os.makedirs(FEATURES_PATH, exist_ok=True)
+        features = build_feature_table(
+            datasets,
+            resolved_config,
+        )
 
-        output_file = f"{FEATURES_PATH}/features.parquet"
-        df.to_parquet(output_file, index=False)
+        if not FEATURES_PATH.startswith(
+            "gs://"
+        ):
+            os.makedirs(
+                FEATURES_PATH,
+                exist_ok=True,
+            )
 
-        logger.info(f"Feature engineering successful. Final shape: {df.shape}")
+        output_file = (
+            f"{FEATURES_PATH}/features.parquet"
+        )
+        features.to_parquet(
+            output_file,
+            index=False,
+        )
 
-    except Exception as e:
-        logger.error(f"Critical error in run_feature_pipeline: {str(e)}")
+        logger.info(
+            "Feature engineering successful | "
+            "rows=%s | columns=%s | output=%s",
+            len(features),
+            len(features.columns),
+            output_file,
+        )
+
+    except Exception:
+        logger.exception(
+            "Feature pipeline failed."
+        )
         raise
+
 
 if __name__ == "__main__":
     run_feature_pipeline()
