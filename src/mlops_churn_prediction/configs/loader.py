@@ -12,8 +12,8 @@ from mlops_churn_prediction.configs.environment import (
 )
 from mlops_churn_prediction.configs.paths import get_project_root
 from mlops_churn_prediction.storage.filesystem import (
-    ensure_dir,
-    file_exists,
+    ensure_dir as ensure_dir,
+    file_exists as file_exists,
 )
 
 PROJECT_ROOT = get_project_root()
