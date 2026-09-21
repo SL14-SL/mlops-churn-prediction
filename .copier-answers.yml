@@ -1,0 +1,9 @@
+# Changes here will be overwritten by Copier.
+_commit: v0.3.0
+_src_path: git@github.com:SL14-SL/mlops-project-template.git
+author_name: Steffen Lauterbach
+project_description: Production-oriented customer churn prediction system
+project_name: Customer Churn Prediction
+project_slug: mlops-churn-prediction
+python_version: 3.12.9
+task_type: classification
