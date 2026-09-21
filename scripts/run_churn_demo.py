@@ -7,7 +7,8 @@ import fsspec
 import pandas as pd
 
 from datetime import datetime, timezone, timedelta
-from mlops_churn_prediction.configs.loader import file_exists, get_path
+from mlops_churn_prediction.configs.loader import get_path
+from mlops_churn_prediction.storage.filesystem import file_exists
 from mlops_churn_prediction.utils.logger import get_logger
 
 logger = get_logger(__name__)

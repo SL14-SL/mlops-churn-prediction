@@ -9,10 +9,10 @@ from sklearn.model_selection import (
 )
 
 from mlops_churn_prediction.configs.loader import (
-    file_exists,
     get_path,
     load_config,
 )
+from mlops_churn_prediction.storage.filesystem import file_exists
 from mlops_churn_prediction.configs.paths import join_uri
 from mlops_churn_prediction.data.validation.validate import (
     validate_train,

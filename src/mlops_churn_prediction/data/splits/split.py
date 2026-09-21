@@ -3,7 +3,14 @@ from __future__ import annotations
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-from mlops_churn_prediction.configs.loader import ensure_dir, file_exists, get_path, load_config
+from mlops_churn_prediction.configs.loader import (
+    get_path,
+    load_config,
+)
+from mlops_churn_prediction.storage.filesystem import (
+    ensure_dir,
+    file_exists,
+)
 from mlops_churn_prediction.utils.logger import get_logger
 
 logger = get_logger(__name__)

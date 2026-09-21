@@ -11,10 +11,8 @@ from pathlib import Path
 import fsspec
 import pandas as pd
 
-from mlops_churn_prediction.configs.loader import (
-    file_exists,
-    get_path,
-)
+from mlops_churn_prediction.configs.loader import get_path
+from mlops_churn_prediction.storage.filesystem import file_exists
 
 
 MONITORING_PATH = get_path(

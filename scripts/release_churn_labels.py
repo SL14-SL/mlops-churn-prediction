@@ -8,7 +8,8 @@ from uuid import uuid4
 import fsspec
 import pandas as pd
 
-from mlops_churn_prediction.configs.loader import ensure_dir, get_path
+from mlops_churn_prediction.configs.loader import get_path
+from mlops_churn_prediction.storage.filesystem import ensure_dir
 from mlops_churn_prediction.utils.logger import get_logger
 
 logger = get_logger(__name__)

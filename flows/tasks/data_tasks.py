@@ -9,7 +9,14 @@ import mlflow
 from google.cloud import storage
 
 # --- INTERNAL CONFIG BOOTSTRAP ---
-from mlops_churn_prediction.configs.loader import load_config, get_path, file_exists, ensure_dir
+from mlops_churn_prediction.configs.loader import (
+    load_config,
+    get_path,
+)
+from mlops_churn_prediction.storage.filesystem import (
+    file_exists,
+    ensure_dir,
+)
 
 # Load config early so environment variables (Prefect, MLflow) are set
 ENV_CFG = load_config()

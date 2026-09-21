@@ -21,7 +21,11 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 
-from mlops_churn_prediction.configs.loader import ensure_dir, get_path, load_config
+from mlops_churn_prediction.configs.loader import (
+    get_path,
+    load_config,
+)
+from mlops_churn_prediction.storage.filesystem import ensure_dir
 from mlops_churn_prediction.training.explainability import log_feature_importance, log_shap_summary
 from mlops_churn_prediction.training.model_factory import build_model, fit_model, log_model_by_type
 from mlops_churn_prediction.utils.logger import get_logger

@@ -7,10 +7,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from mlops_churn_prediction.configs.loader import (
-    file_exists,
-    get_path,
-)
+from mlops_churn_prediction.configs.loader import get_path
+from mlops_churn_prediction.storage.filesystem import file_exists
 
 
 RAW_DATA_PATH = get_path(

@@ -13,7 +13,14 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 
-from mlops_churn_prediction.configs.loader import ensure_dir, file_exists, get_path, load_config
+from mlops_churn_prediction.configs.loader import (
+    get_path,
+    load_config,
+)
+from mlops_churn_prediction.storage.filesystem import (
+    ensure_dir,
+    file_exists,
+)
 from mlops_churn_prediction.monitoring.config import get_business_settings
 from mlops_churn_prediction.monitoring.performance import compute_business_metrics
 from mlops_churn_prediction.utils.logger import get_logger
