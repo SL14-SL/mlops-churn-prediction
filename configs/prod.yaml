@@ -29,6 +29,7 @@ paths:
   predictions: gs://${GCP_BUCKET_NAME}/monitoring/predictions
   monitoring: gs://${GCP_BUCKET_NAME}/monitoring/history
   versioning: gs://${GCP_BUCKET_NAME}/data/versioning
+  pipeline_runs: gs://${GCP_BUCKET_NAME}/pipeline-runs
 
 costs:
   training:

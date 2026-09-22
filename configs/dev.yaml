@@ -29,6 +29,7 @@ paths:
   predictions: data/predictions
   monitoring: data/monitoring
   versioning: data/versioning
+  pipeline_runs: data/pipeline-runs
 
 costs:
   training:
