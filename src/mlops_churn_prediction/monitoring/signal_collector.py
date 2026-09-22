@@ -13,8 +13,8 @@ from mlops_churn_prediction.configs.loader import get_path
 from mlops_churn_prediction.storage.filesystem import file_exists
 from mlops_churn_prediction.configs.paths import join_uri
 
-from mlops_churn_prediction.inference.releases.repository import (
-    load_active_serving_manifest,
+from mlops_churn_prediction.inference.releases.lifecycle_repository import (
+    load_active_release_manifest,
 )
 from mlops_churn_prediction.data.validation.validate import (
     validate_train,
@@ -251,7 +251,7 @@ def _resolve_last_training_at_utc(
 
     try:
         manifest, _ = (
-            load_active_serving_manifest(
+            load_active_release_manifest(
                 models_path=models_path
             )
         )
