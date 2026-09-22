@@ -23,7 +23,8 @@ from mlops_churn_prediction.api.serving_state import (
 from mlops_churn_prediction.inference.model_manager import (
     load_serving_bundle_for_release,
 )
-from mlops_churn_prediction.inference.releases.repository import (
+from mlops_churn_prediction.inference.releases.lifecycle_pointer import (
+    ReleaseOperation,
     activate_release_pointer,
     load_active_release_id,
 )
@@ -137,7 +138,7 @@ def rollback_serving_release(
         activate_release_pointer(
             models_path=MODELS_PATH,
             release_id=payload.release_id,
-            operation="rollback",
+            operation=ReleaseOperation.ROLLBACK,
             previous_release_id=(
                 previous_release_id
             ),
@@ -157,7 +158,7 @@ def rollback_serving_release(
                         previous_release_id
                     ),
                     operation=(
-                        "rollback_reverted"
+                        ReleaseOperation.ROLLBACK
                     ),
                     previous_release_id=(
                         payload.release_id

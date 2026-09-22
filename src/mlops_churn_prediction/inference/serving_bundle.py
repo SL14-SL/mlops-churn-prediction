@@ -1,183 +1,72 @@
-from __future__ import annotations
-
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from typing import Any
 
-@dataclass(frozen=True)
-class ServingArtifactReference:
-    """
-    Reference to one immutable serving artifact.
-    """
+from .releases.contracts import (
+    ServingReleaseManifest,
+    validate_serving_manifest,
+)
 
-    path: str
-    sha256: str
-
-
-@dataclass(frozen=True)
-class ServingReleaseManifest:
-    """
-    Persistent description of one complete churn serving release.
-    """
-
-    schema_version: int
-    release_id: str
-    created_at_utc: str
-
-    model_name: str
-    model_version: str
-    model_run_id: str
-    model_uri: str
-    model_type: str
-
-    decision_threshold: float
-
-    dataset_version: str | None
-    config_hash: str | None
-    git_commit: str | None
-
-    feature_schema: (
-        ServingArtifactReference
-    )
-
-    prediction_probe: (
-        ServingArtifactReference | None
-    ) = None
-
-    def to_dict(
-        self,
-    ) -> dict[str, Any]:
-        return asdict(self)
-
-def validate_artifact_reference(
-    reference: ServingArtifactReference,
-    *,
-    name: str,
-) -> None:
-    """
-    Validate one immutable serving artifact reference.
-    """
-    if not isinstance(
-        reference,
-        ServingArtifactReference,
-    ):
-        raise ValueError(
-            f"Serving manifest has an invalid {name} reference."
-        )
-
-    if not reference.path:
-        raise ValueError(
-            f"Serving manifest {name} has no path."
-        )
-
-    if not reference.sha256:
-        raise ValueError(
-            f"Serving manifest {name} has no checksum."
-        )
-
-    
-def validate_serving_manifest(
-    manifest: ServingReleaseManifest,
-) -> None:
-    """
-    Raise ValueError if a serving release manifest is incomplete.
-    """
-    if manifest.schema_version < 1:
-        raise ValueError(
-            "Serving manifest has an invalid schema version."
-        )
-
-    if not manifest.release_id:
-        raise ValueError(
-            "Serving manifest has no release ID."
-        )
-
-    if not manifest.created_at_utc:
-        raise ValueError(
-            "Serving manifest has no creation timestamp."
-        )
-
-    if not manifest.model_name:
-        raise ValueError(
-            "Serving manifest has no model name."
-        )
-
-    if not manifest.model_version:
-        raise ValueError(
-            "Serving manifest has no model version."
-        )
-
-    if not manifest.model_run_id:
-        raise ValueError(
-            "Serving manifest has no model run ID."
-        )
-
-    if not manifest.model_uri:
-        raise ValueError(
-            "Serving manifest has no model URI."
-        )
-
-    if not manifest.model_type:
-        raise ValueError(
-            "Serving manifest has no model type."
-        )
-
-    if not isinstance(
-        manifest.decision_threshold,
-        (int, float),
-    ):
-        raise ValueError(
-            "Serving manifest has an invalid decision threshold."
-        )
-
-    if not 0.0 <= float(
-        manifest.decision_threshold
-    ) <= 1.0:
-        raise ValueError(
-            "Serving manifest decision threshold must be "
-            "between 0 and 1."
-        )
-
-    validate_artifact_reference(
-        manifest.feature_schema,
-        name="feature schema",
-    )
-
-    if manifest.prediction_probe is not None:
-        validate_artifact_reference(
-            manifest.prediction_probe,
-            name="prediction probe",
-        )
 
 @dataclass(frozen=True)
 class ServingBundle:
-    """
-    Complete validated state required for churn inference.
+    """Complete validated state required for churn inference."""
 
-    A bundle is created completely before it replaces the currently
-    active serving state.
-    """
-    release_id: str 
+    release_id: str
     manifest: ServingReleaseManifest
-
     model: Any
     model_name: str
     model_type: str
-
     decision_threshold: float
     feature_schema: dict[str, Any]
-
     serving_alias: str
     model_uri: str
     model_version: str
     model_run_id: str
 
 
+def _manifest_decision_threshold(
+    manifest: ServingReleaseManifest,
+) -> float:
+    """Return the classification threshold stored in metadata."""
+    metadata = manifest.metadata
+
+    if not isinstance(metadata, dict):
+        raise ValueError(
+            "Serving manifest has no valid metadata."
+        )
+
+    threshold = metadata.get(
+        "decision_threshold"
+    )
+
+    if (
+        isinstance(threshold, bool)
+        or not isinstance(
+            threshold,
+            (int, float),
+        )
+    ):
+        raise ValueError(
+            "Serving manifest has an invalid decision threshold."
+        )
+
+    normalized_threshold = float(
+        threshold
+    )
+
+    if not 0.0 <= normalized_threshold <= 1.0:
+        raise ValueError(
+            "Serving manifest decision threshold must be "
+            "between 0 and 1."
+        )
+
+    return normalized_threshold
+
+
 def validate_serving_bundle(
     bundle: ServingBundle,
 ) -> None:
-    """
-    Raise ValueError if a churn serving bundle is incomplete or invalid.
-    """
+    """Raise ValueError when a churn serving bundle is invalid."""
     if not bundle.release_id:
         raise ValueError(
             "Serving bundle has no release ID."
@@ -200,39 +89,30 @@ def validate_serving_bundle(
             "Serving bundle has no model."
         )
 
-    if not bundle.model_name:
-        raise ValueError(
-            "Serving bundle has no model name."
-        )
+    required_strings = {
+        "model name": bundle.model_name,
+        "model type": bundle.model_type,
+        "serving alias": bundle.serving_alias,
+        "model URI": bundle.model_uri,
+        "model version": bundle.model_version,
+        "model run ID": bundle.model_run_id,
+    }
 
-    if not bundle.model_type:
-        raise ValueError(
-            "Serving bundle has no model type."
-        )
+    for field_name, value in required_strings.items():
+        if not isinstance(value, str) or not value:
+            raise ValueError(
+                f"Serving bundle has no {field_name}."
+            )
 
-    if not bundle.serving_alias:
-        raise ValueError(
-            "Serving bundle has no serving alias."
+    if (
+        isinstance(
+            bundle.decision_threshold,
+            bool,
         )
-
-    if not bundle.model_uri:
-        raise ValueError(
-            "Serving bundle has no model URI."
+        or not isinstance(
+            bundle.decision_threshold,
+            (int, float),
         )
-
-    if not bundle.model_version:
-        raise ValueError(
-            "Serving bundle has no model version."
-        )
-
-    if not bundle.model_run_id:
-        raise ValueError(
-            "Serving bundle has no model run ID."
-        )
-
-    if not isinstance(
-        bundle.decision_threshold,
-        (int, float),
     ):
         raise ValueError(
             "Serving bundle has an invalid decision threshold."
@@ -242,7 +122,8 @@ def validate_serving_bundle(
         bundle.decision_threshold
     ) <= 1.0:
         raise ValueError(
-            "Serving bundle decision threshold must be between 0 and 1."
+            "Serving bundle decision threshold must be "
+            "between 0 and 1."
         )
 
     if not isinstance(
@@ -267,12 +148,14 @@ def validate_serving_bundle(
         for column in columns
     ):
         raise ValueError(
-            "Serving bundle feature schema contains invalid columns."
+            "Serving bundle feature schema contains "
+            "invalid columns."
         )
 
     if len(columns) != len(set(columns)):
         raise ValueError(
-            "Serving bundle feature schema contains duplicate columns."
+            "Serving bundle feature schema contains "
+            "duplicate columns."
         )
 
     dtypes = bundle.feature_schema.get(
@@ -296,69 +179,52 @@ def validate_serving_bundle(
             f"{sorted(unknown_dtype_columns)}."
         )
 
-    if (
-        bundle.manifest.release_id
-        != bundle.release_id
-    ):
-        raise ValueError(
-            "Serving bundle release ID does not "
-            "match manifest."
-        )
+    model_reference = bundle.manifest.model
+
+    expected_values = {
+        "release ID": (
+            bundle.manifest.release_id,
+            bundle.release_id,
+        ),
+        "model name": (
+            model_reference.name,
+            bundle.model_name,
+        ),
+        "model version": (
+            model_reference.version,
+            bundle.model_version,
+        ),
+        "model run ID": (
+            model_reference.run_id,
+            bundle.model_run_id,
+        ),
+        "model URI": (
+            model_reference.uri,
+            bundle.model_uri,
+        ),
+        "model type": (
+            model_reference.model_type,
+            bundle.model_type,
+        ),
+    }
+
+    for field_name, (
+        manifest_value,
+        bundle_value,
+    ) in expected_values.items():
+        if manifest_value != bundle_value:
+            raise ValueError(
+                f"Serving bundle {field_name} does not "
+                "match manifest."
+            )
 
     if (
-        bundle.manifest.model_name
-        != bundle.model_name
+        _manifest_decision_threshold(
+            bundle.manifest
+        )
+        != float(bundle.decision_threshold)
     ):
         raise ValueError(
-            "Serving bundle model name does not "
+            "Serving bundle decision threshold does not "
             "match manifest."
-        )
-
-    if (
-        bundle.manifest.model_version
-        != bundle.model_version
-    ):
-        raise ValueError(
-            "Serving bundle model version does not "
-            "match manifest."
-        )
-
-    if (
-        bundle.manifest.model_run_id
-        != bundle.model_run_id
-    ):
-        raise ValueError(
-            "Serving bundle model run ID does not "
-            "match manifest."
-        )
-
-    if (
-        bundle.manifest.model_uri
-        != bundle.model_uri
-    ):
-        raise ValueError(
-            "Serving bundle model URI does not "
-            "match manifest."
-        )
-
-    if (
-        bundle.manifest.model_type
-        != bundle.model_type
-    ):
-        raise ValueError(
-            "Serving bundle model type does not "
-            "match manifest."
-        )
-
-    if (
-        float(
-            bundle.manifest.decision_threshold
-        )
-        != float(
-            bundle.decision_threshold
-        )
-    ):
-        raise ValueError(
-            "Serving bundle decision threshold "
-            "does not match manifest."
         )

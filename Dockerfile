@@ -12,7 +12,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 # UV_PYTHON_INSTALL_DIR: Force uv to install Python inside /app instead of /home
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app \
+    PYTHONPATH=/app/src:/app \
     UV_PROJECT_ENVIRONMENT=/app/.venv \
     UV_LINK_MODE=copy \
     UV_CACHE_DIR=/tmp/.uv_cache \
