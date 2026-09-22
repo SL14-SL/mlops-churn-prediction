@@ -7,7 +7,7 @@ model:
 
 tracking:
   mlflow_tracking_uri: ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
-  experiment_name: churn-prediction-training-dev
+  experiment_name: churn-prediction-training-dev-v2
   model_name: churn-prediction-model-dev
   promotion:
     metric_name: roc_auc

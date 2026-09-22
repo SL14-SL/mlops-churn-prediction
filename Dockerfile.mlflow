@@ -41,6 +41,7 @@ exec mlflow server \
   --port ${PORT:-5000} \
   --workers 1 \
   --backend-store-uri \"$BACKEND_STORE_URI\" \
-  --default-artifact-root \"$MLFLOW_ARTIFACT_ROOT\" \
+  --serve-artifacts \
+  --artifacts-destination \"$MLFLOW_ARTIFACT_ROOT\" \
   --allowed-hosts \"$MLFLOW_SERVER_ALLOWED_HOSTS\" \
   --cors-allowed-origins \"$MLFLOW_SERVER_CORS_ALLOWED_ORIGINS\""]
