@@ -12,13 +12,17 @@ from mlops_churn_prediction.deployment.verification import (
     verify_prediction_probe,
     verify_serving_release,
 )
-from mlops_churn_prediction.inference.releases.repository import (
-    list_serving_release_manifests,
+from mlops_churn_prediction.configs.paths import join_uri
+from mlops_churn_prediction.inference.releases.lifecycle_pointer import (
     load_active_release_id,
-    load_release_prediction_probe,
-    load_serving_release_manifest,
 )
-
+from mlops_churn_prediction.inference.releases.lifecycle_repository import (
+    list_release_manifests,
+    load_release_manifest,
+)
+from mlops_churn_prediction.inference.releases.storage import (
+    load_json,
+)
 
 def require_environment_variable(name: str) -> str:
     """
@@ -87,7 +91,7 @@ def select_rollback_release(
     """
     Select the newest non-active release containing a prediction probe.
     """
-    manifests = list_serving_release_manifests(
+    manifests = list_release_manifests(
         models_path=models_path,
     )
 
@@ -95,12 +99,7 @@ def select_rollback_release(
         if manifest.release_id == active_release_id:
             continue
 
-        prediction_probe = load_release_prediction_probe(
-            models_path=models_path,
-            release_id=manifest.release_id,
-        )
-
-        if prediction_probe is not None:
+        if "prediction_probe" in manifest.artifacts:
             return manifest.release_id
 
     raise RuntimeError(
@@ -119,19 +118,29 @@ def verify_release(
     """
     Verify readiness, lineage, and semantic prediction for one release.
     """
-    manifest = load_serving_release_manifest(
-        models_path=models_path,
-        release_id=release_id,
-    )
-    prediction_probe = load_release_prediction_probe(
+    manifest, release_root = load_release_manifest(
         models_path=models_path,
         release_id=release_id,
     )
 
-    if prediction_probe is None:
-        raise RuntimeError(
-            f"Serving release '{release_id}' has no prediction probe."
+    prediction_probe_reference = (
+        manifest.artifacts.get(
+            "prediction_probe"
         )
+    )
+
+    if prediction_probe_reference is None:
+        raise RuntimeError(
+            f"Serving release '{release_id}' "
+            "has no prediction probe."
+        )
+
+    prediction_probe = load_json(
+        join_uri(
+            release_root,
+            prediction_probe_reference.path,
+        )
+    )
 
     readiness_result = verify_serving_release(
         api_base_url=api_base_url,
@@ -142,14 +151,14 @@ def verify_release(
     )
 
     if str(readiness_result.model_version) != str(
-        manifest.model_version
+        manifest.model.version
     ):
         raise RuntimeError(
             "Ready endpoint model version does not match "
             f"release manifest '{release_id}'."
         )
 
-    if readiness_result.model_run_id != manifest.model_run_id:
+    if readiness_result.model_run_id != manifest.model.run_id:
         raise RuntimeError(
             "Ready endpoint model run ID does not match "
             f"release manifest '{release_id}'."
@@ -160,8 +169,8 @@ def verify_release(
         api_key=api_key,
         prediction_probe_payload=prediction_probe,
         expected_release_id=manifest.release_id,
-        expected_model_version=manifest.model_version,
-        expected_model_run_id=manifest.model_run_id,
+        expected_model_version=manifest.model.version,
+        expected_model_run_id=manifest.model.run_id,
         attempts=3,
         delay_seconds=1.0,
         timeout_seconds=30.0,

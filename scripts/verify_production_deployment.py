@@ -14,10 +14,15 @@ from mlops_churn_prediction.deployment.verification import (
     verify_prediction_probe,
     verify_serving_release,
 )
-from mlops_churn_prediction.inference.releases.repository import (
+from mlops_churn_prediction.configs.paths import join_uri
+from mlops_churn_prediction.inference.releases.lifecycle_pointer import (
     load_active_release_id,
-    load_release_prediction_probe,
-    load_serving_release_manifest,
+)
+from mlops_churn_prediction.inference.releases.lifecycle_repository import (
+    load_release_manifest,
+)
+from mlops_churn_prediction.inference.releases.storage import (
+    load_json,
 )
 
 
@@ -107,47 +112,53 @@ def main() -> int:
         timeout_seconds=100.0,
     )
 
-    manifest = load_serving_release_manifest(
+    manifest, release_root = load_release_manifest(
         models_path=models_path,
         release_id=expected_release_id,
     )
 
     if (
         str(readiness_result.model_version)
-        != str(manifest.model_version)
+        != str(manifest.model.version)
     ):
         raise ServingVerificationError(
             "Production model version does not "
             "match the active release manifest | "
             f"ready="
             f"{readiness_result.model_version} | "
-            f"manifest={manifest.model_version}"
+            f"manifest={manifest.model.version}"
         )
 
     if (
         readiness_result.model_run_id
-        != manifest.model_run_id
+        != manifest.model.run_id
     ):
         raise ServingVerificationError(
             "Production model run ID does not "
             "match the active release manifest | "
             f"ready="
             f"{readiness_result.model_run_id} | "
-            f"manifest={manifest.model_run_id}"
+            f"manifest={manifest.model.run_id}"
         )
 
-    prediction_probe_payload = (
-        load_release_prediction_probe(
-            models_path=models_path,
-            release_id=expected_release_id,
+    prediction_probe_reference = (
+        manifest.artifacts.get(
+            "prediction_probe"
         )
     )
 
-    if prediction_probe_payload is None:
+    if prediction_probe_reference is None:
         raise ServingVerificationError(
             "The active production release has "
             "no semantic prediction probe."
         )
+
+    prediction_probe_payload = load_json(
+        join_uri(
+            release_root,
+            prediction_probe_reference.path,
+        )
+    )
 
     prediction_result = (
         verify_prediction_probe(
@@ -160,10 +171,10 @@ def main() -> int:
                 manifest.release_id
             ),
             expected_model_version=(
-                manifest.model_version
+                manifest.model.version
             ),
             expected_model_run_id=(
-                manifest.model_run_id
+                manifest.model.run_id
             ),
             attempts=3,
             delay_seconds=2.0,
