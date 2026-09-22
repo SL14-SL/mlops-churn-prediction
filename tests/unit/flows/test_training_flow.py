@@ -563,16 +563,22 @@ def test_publish_serving_release_task(
 
     mock_manifest = MagicMock(
         release_id="release-8",
-        model_version="8",
     )
+    mock_manifest.model.version = "8"
     mock_manifest.to_dict.return_value = {
         "release_id": "release-8",
-        "model_version": "8",
+        "model": {
+            "version": "8",
+        },
     }
 
-    mock_publish = MagicMock(
-        return_value=mock_manifest
+    mock_published_release = MagicMock(
+        manifest=mock_manifest,
     )
+    mock_publish = MagicMock(
+        return_value=mock_published_release
+    )
+    mock_write_json = MagicMock()
     mock_build_probe = MagicMock(
         return_value={
             "inputs": [
@@ -606,6 +612,11 @@ def test_publish_serving_release_task(
     )
     monkeypatch.setattr(
         "flows.tasks.serving_tasks."
+        "write_json",
+        mock_write_json,
+    )
+    monkeypatch.setattr(
+        "flows.tasks.serving_tasks."
         "build_prediction_probe",
         mock_build_probe,
     )
@@ -630,7 +641,9 @@ def test_publish_serving_release_task(
 
     assert result == {
         "release_id": "release-8",
-        "model_version": "8",
+        "model": {
+            "version": "8",
+        },
     }
 
     mock_build_probe.assert_called_once_with(
@@ -649,45 +662,78 @@ def test_publish_serving_release_task(
         "models_path"
     ] == "models"
 
-    assert call_kwargs[
-        "model_name"
-    ] == serving_tasks.MODEL_NAME
+    registration = call_kwargs[
+        "registration"
+    ]
+    assert registration.registered is True
+    assert registration.model_name == (
+        serving_tasks.MODEL_NAME
+    )
+    assert registration.model_version == "8"
+    assert registration.run_id == "run_456"
+    assert registration.model_uri == (
+        f"models:/{serving_tasks.MODEL_NAME}/8"
+    )
 
-    assert call_kwargs[
-        "model_version"
-    ] == "8"
+    promotion = call_kwargs["promotion"]
+    assert promotion.decision.promote is True
+    assert (
+        promotion.champion_assignment.model_name
+        == serving_tasks.MODEL_NAME
+    )
+    assert (
+        promotion.champion_assignment.model_version
+        == "8"
+    )
+    assert (
+        promotion.champion_assignment.alias.value
+        == "champion"
+    )
 
-    assert call_kwargs[
-        "model_run_id"
-    ] == "run_456"
+    assert (
+        call_kwargs["task_type"].value
+        == "classification"
+    )
+    assert call_kwargs["model_type"] == "xgboost"
 
-    assert call_kwargs[
-        "model_type"
-    ] == "xgboost"
+    sources = call_kwargs["sources"]
 
-    assert call_kwargs[
-        "decision_threshold"
-    ] == 0.42
+    assert (
+        sources["feature_schema"].source_uri
+        == "models/feature_schema.json"
+    )
+    assert (
+        sources["feature_schema"].relative_path
+        == "feature_schema.json"
+    )
+    assert (
+        sources["prediction_probe"].source_uri
+        == (
+            "models/training-runs/run_456/"
+            "prediction_probe.json"
+        )
+    )
 
-    assert call_kwargs[
-        "feature_schema_source"
-    ] == "models/feature_schema.json"
+    assert call_kwargs["metadata"] == {
+        "decision_threshold": 0.42,
+        "publication_source": (
+            "legacy_churn_training_flow"
+        ),
+    }
+    assert (
+        call_kwargs["dataset_version"]
+        == "dataset-1"
+    )
+    assert call_kwargs["git_commit"] == "abc123"
+    assert call_kwargs["config_hash"] is not None
 
-    assert call_kwargs[
-        "dataset_version"
-    ] == "dataset-1"
-
-    assert call_kwargs[
-        "git_commit"
-    ] == "abc123"
-
-    assert call_kwargs[
-        "config_hash"
-    ] is not None
-
-    assert call_kwargs[
-        "prediction_probe_payload"
-    ] == mock_build_probe.return_value
+    mock_write_json.assert_called_once_with(
+        (
+            "models/training-runs/run_456/"
+            "prediction_probe.json"
+        ),
+        mock_build_probe.return_value,
+    )
 
 
 def test_publish_serving_release_rejects_non_promoted_model():

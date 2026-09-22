@@ -9,47 +9,50 @@ from mlops_churn_prediction.deployment.verification import (
     PredictionProbeResult,
     ServingVerificationResult,
 )
-from mlops_churn_prediction.inference.serving_bundle import (
-    ServingArtifactReference,
+from mlops_churn_prediction.inference.releases.contracts import (
+    ArtifactReference,
+    ModelReference,
     ServingReleaseManifest,
+    TaskType,
 )
 
 
-def build_manifest() -> (
-    ServingReleaseManifest
-):
+def build_manifest() -> ServingReleaseManifest:
     return ServingReleaseManifest(
         schema_version=1,
         release_id="release-2",
         created_at_utc=(
             "2026-08-24T12:00:00+00:00"
         ),
-        model_name=(
-            "customer-churn-model-dev"
+        task_type=TaskType.CLASSIFICATION,
+        model=ModelReference(
+            name=(
+                "customer-churn-model-dev"
+            ),
+            version="2",
+            run_id="run-2",
+            uri=(
+                "models:/"
+                "customer-churn-model-dev/2"
+            ),
+            model_type="xgboost",
         ),
-        model_version="2",
-        model_run_id="run-2",
-        model_uri=(
-            "models:/"
-            "customer-churn-model-dev/2"
-        ),
-        model_type="xgboost",
-        decision_threshold=0.42,
+        artifacts={
+            "feature_schema": ArtifactReference(
+                path="feature_schema.json",
+                sha256="a" * 64,
+            ),
+            "prediction_probe": ArtifactReference(
+                path="prediction_probe.json",
+                sha256="b" * 64,
+            ),
+        },
         dataset_version="dataset-2",
         config_hash="config-hash",
         git_commit="abc123",
-        feature_schema=(
-            ServingArtifactReference(
-                path="feature_schema.json",
-                sha256="schema-hash",
-            )
-        ),
-        prediction_probe=(
-            ServingArtifactReference(
-                path="prediction_probe.json",
-                sha256="probe-hash",
-            )
-        ),
+        metadata={
+            "decision_threshold": 0.42,
+        },
     )
 
 
@@ -229,14 +232,17 @@ def test_verify_serving_release_task(
     )
     monkeypatch.setattr(
         serving_tasks,
-        "load_serving_release_manifest",
+        "load_release_manifest",
         MagicMock(
-            return_value=manifest
+            return_value=(
+                manifest,
+                "models/serving_releases/release-2",
+            )
         ),
     )
     monkeypatch.setattr(
         serving_tasks,
-        "load_release_prediction_probe",
+        "load_json",
         MagicMock(
             return_value={
                 "inputs": [
@@ -328,9 +334,12 @@ def test_verify_rejects_manifest_mismatch(
     )
     monkeypatch.setattr(
         serving_tasks,
-        "load_serving_release_manifest",
+        "load_release_manifest",
         MagicMock(
-            return_value=manifest
+            return_value=(
+                manifest,
+                "models/serving_releases/release-2",
+            )
         ),
     )
     monkeypatch.setattr(
@@ -400,9 +409,12 @@ def test_rollback_serving_release_task(
     )
     monkeypatch.setattr(
         serving_tasks,
-        "load_serving_release_manifest",
+        "load_release_manifest",
         MagicMock(
-            return_value=manifest
+            return_value=(
+                manifest,
+                "models/serving_releases/release-2",
+            )
         ),
     )
     monkeypatch.setattr(
