@@ -133,6 +133,10 @@ def test_published_artifacts_exist(
             tmp_path / "models"
         ),
         release_id=manifest.release_id,
+        artifact_filenames={
+            "feature_schema": "feature_schema.json",
+            "prediction_probe": "prediction_probe.json",
+        },
     )
 
     assert Path(

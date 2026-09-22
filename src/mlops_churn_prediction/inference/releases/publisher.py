@@ -90,6 +90,10 @@ def publish_serving_release(
     paths = build_release_paths(
         models_path=models_path,
         release_id=release_id,
+        artifact_filenames={
+            "feature_schema": "feature_schema.json",
+            "prediction_probe": "prediction_probe.json",
+        },
     )
 
     if file_exists(paths["manifest"]):
