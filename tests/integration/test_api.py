@@ -3,10 +3,17 @@ from unittest.mock import patch
 import pytest
 
 import mlops_churn_prediction.api.serving_state as serving_state
-from mlops_churn_prediction.inference.serving_bundle import (
-    ServingArtifactReference,
-    ServingBundle,
+from mlops_churn_prediction.inference.releases.contracts import (
+    ArtifactReference,
+    ModelReference,
     ServingReleaseManifest,
+    TaskType,
+)
+from mlops_churn_prediction.inference.releases.lifecycle_pointer import (
+    ReleaseOperation,
+)
+from mlops_churn_prediction.inference.serving_bundle import (
+    ServingBundle,
 )
 
 
@@ -18,9 +25,7 @@ def build_test_manifest(
     decision_threshold: float = 0.5,
 ) -> ServingReleaseManifest:
     """Build an immutable serving manifest for API tests."""
-    model_name = (
-        "customer-churn-model-dev"
-    )
+    model_name = "customer-churn-model-dev"
 
     return ServingReleaseManifest(
         schema_version=1,
@@ -28,27 +33,31 @@ def build_test_manifest(
         created_at_utc=(
             "2026-08-24T12:00:00+00:00"
         ),
-        model_name=model_name,
-        model_version=model_version,
-        model_run_id=model_run_id,
-        model_uri=(
-            f"models:/{model_name}/"
-            f"{model_version}"
+        task_type=TaskType.CLASSIFICATION,
+        model=ModelReference(
+            name=model_name,
+            version=model_version,
+            run_id=model_run_id,
+            uri=(
+                f"models:/{model_name}/"
+                f"{model_version}"
+            ),
+            model_type="xgboost",
         ),
-        model_type="xgboost",
-        decision_threshold=(
-            decision_threshold
-        ),
+        artifacts={
+            "feature_schema": ArtifactReference(
+                path="feature_schema.json",
+                sha256="a" * 64,
+            ),
+        },
         dataset_version="test-dataset",
         config_hash="test-config-hash",
         git_commit="test-commit",
-        feature_schema=(
-            ServingArtifactReference(
-                path="feature_schema.json",
-                sha256="test-schema-hash",
-            )
-        ),
-        prediction_probe=None,
+        metadata={
+            "decision_threshold": (
+                decision_threshold
+            ),
+        },
     )
 
 
@@ -65,19 +74,19 @@ def build_test_bundle(
         release_id=release_id,
         model_version=model_version,
         model_run_id=model_run_id,
-        decision_threshold=(
-            decision_threshold
-        ),
+        decision_threshold=decision_threshold,
     )
 
     return ServingBundle(
         release_id=manifest.release_id,
         manifest=manifest,
         model=model,
-        model_name=manifest.model_name,
-        model_type=manifest.model_type,
-        decision_threshold=(
-            manifest.decision_threshold
+        model_name=manifest.model.name,
+        model_type=manifest.model.model_type,
+        decision_threshold=float(
+            manifest.metadata[
+                "decision_threshold"
+            ]
         ),
         feature_schema={
             "columns": [
@@ -90,13 +99,9 @@ def build_test_bundle(
             },
         },
         serving_alias="champion",
-        model_uri=manifest.model_uri,
-        model_version=(
-            manifest.model_version
-        ),
-        model_run_id=(
-            manifest.model_run_id
-        ),
+        model_uri=manifest.model.uri,
+        model_version=manifest.model.version,
+        model_run_id=manifest.model.run_id,
     )
 
 
@@ -498,7 +503,7 @@ def test_rollback_serving_release(
             serving_state.MODELS_PATH
         ),
         release_id="release-old",
-        operation="rollback",
+        operation=ReleaseOperation.ROLLBACK,
         previous_release_id=(
             "release-new"
         ),
