@@ -35,3 +35,16 @@ deployments:
   - cron: 0 3 * * *
     timezone: null
     day_or: true
+- name: template-training-validation
+  version: null
+  tags:
+    - template-migration
+  concurrency_limit: null
+  description: Parallel validation of the template-based training lifecycle
+  entrypoint: src/mlops_churn_prediction/orchestration/template_training_flow.py:training_flow
+  parameters:
+    run_id: null
+  work_pool:
+    name: local-pool
+    work_queue_name: null
+    job_variables: {}
