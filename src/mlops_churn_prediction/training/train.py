@@ -5,9 +5,8 @@ import os
 import tempfile
 import time
 from datetime import datetime, timezone
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
-import fsspec
 import joblib
 import mlflow
 import pandas as pd
@@ -26,6 +25,7 @@ from mlops_churn_prediction.configs.loader import (
 )
 from mlops_churn_prediction.storage.filesystem import ensure_dir
 from mlops_churn_prediction.training.explainability import log_feature_importance, log_shap_summary
+from mlops_churn_prediction.training.feature_schema import save_feature_schema
 from mlops_churn_prediction.training.model_factory import build_model, fit_model, log_model_by_type
 from mlops_churn_prediction.training.candidate import find_best_threshold
 from mlops_churn_prediction.training.preparation import normalize_feature_dtypes
@@ -83,30 +83,6 @@ def get_or_create_experiment(project_name: str) -> None:
         mlflow.create_experiment(project_name)
 
     mlflow.set_experiment(project_name)
-
-
-def save_feature_schema(
-    df: pd.DataFrame,
-    path: str = "models/feature_schema.json",
-) -> dict:
-    """
-    Save the final training feature schema used by the model.
-
-    The schema path can point to local storage or GCS. The returned schema is
-    used at inference time to align incoming features.
-    """
-    schema = {
-        "columns": list(df.columns),
-        "dtypes": {col: str(dtype) for col, dtype in df.dtypes.items()},
-    }
-
-    parent = str(PurePosixPath(path).parent)
-    ensure_dir(parent)
-
-    with fsspec.open(path, "w", encoding="utf-8") as f:
-        json.dump(schema, f, indent=2)
-
-    return schema
 
 
 def _log_feature_schema_artifact(feature_schema: dict) -> None:

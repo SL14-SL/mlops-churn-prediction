@@ -18,6 +18,9 @@ from mlops_churn_prediction.data.contracts import (
 from mlops_churn_prediction.training.contracts import (
     TrainingResult,
 )
+from mlops_churn_prediction.training.feature_schema import (
+    save_feature_schema,
+)
 from mlops_churn_prediction.training.model_factory import (
     build_model,
     fit_model,
@@ -69,6 +72,39 @@ def find_best_threshold(
             )
 
     return best_threshold, best_score
+
+
+def _feature_schema_path(
+    config: Mapping[str, Any],
+    *,
+    run_id: str,
+) -> str:
+    """Return the run-specific feature-schema path."""
+    paths = config.get("paths")
+
+    if not isinstance(paths, Mapping):
+        raise ValueError(
+            "Training config must contain "
+            "a valid 'paths' section."
+        )
+
+    models_path = paths.get("models")
+
+    if (
+        not isinstance(models_path, str)
+        or not models_path.strip()
+        or models_path.startswith("${")
+    ):
+        raise ValueError(
+            "Config path 'models' must be "
+            "a resolved non-empty string."
+        )
+
+    return (
+        f"{models_path.rstrip('/')}"
+        f"/training-runs/{run_id}"
+        "/feature_schema.json"
+    )
 
 
 def train_model_candidate(
@@ -209,9 +245,24 @@ def train_model_candidate(
         **dict(configured_parameters),
     }
 
+    feature_schema_path = _feature_schema_path(
+        config,
+        run_id=run_id,
+    )
+
+    save_feature_schema(
+        prepared.x_train,
+        feature_schema_path,
+    )
+
     return TrainingResult(
         model=model,
         run_id=run_id,
         metrics=metrics,
         parameters=parameters,
+        artifacts={
+            "feature_schema": (
+                feature_schema_path
+            ),
+        },
     )

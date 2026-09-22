@@ -31,6 +31,9 @@ CONFIG = {
             "customerid",
         ],
     },
+    "paths": {
+        "models": "models",
+    },
 }
 
 
@@ -101,6 +104,21 @@ def test_train_model_candidate_returns_training_result(
     )
     fit_model = MagicMock()
 
+    save_feature_schema = MagicMock(
+        return_value={
+            "columns": ["tenure"],
+            "dtypes": {
+                "tenure": "int64",
+            },
+        }
+    )
+
+    monkeypatch.setattr(
+        candidate,
+        "save_feature_schema",
+        save_feature_schema,
+    )
+
     monkeypatch.setattr(
         candidate,
         "build_model",
@@ -144,6 +162,23 @@ def test_train_model_candidate_returns_training_result(
         CONFIG["model"],
         seed=42,
     )
+    assert result.artifacts == {
+        "feature_schema": (
+            "models/training-runs/run-123/"
+            "feature_schema.json"
+        ),
+    }
+
+    schema_call = (
+        save_feature_schema.call_args
+    )
+    assert list(
+        schema_call.args[0].columns
+    ) == ["tenure"]
+    assert schema_call.args[1] == (
+        "models/training-runs/run-123/"
+        "feature_schema.json"
+    )
     fit_model.assert_called_once()
 
     fit_call = fit_model.call_args
@@ -172,6 +207,11 @@ def test_train_model_candidate_does_not_start_mlflow_run(
     monkeypatch.setattr(
         candidate,
         "fit_model",
+        MagicMock(),
+    )
+    monkeypatch.setattr(
+        candidate,
+        "save_feature_schema",
         MagicMock(),
     )
 
