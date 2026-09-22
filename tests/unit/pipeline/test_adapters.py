@@ -11,6 +11,8 @@ from mlops_churn_prediction.data.contracts import (
     FeatureBuilder,
 )
 from mlops_churn_prediction.training.contracts import (
+    EvaluationResult,
+    ModelEvaluator,
     ModelTrainer,
     TrainingResult,
 )
@@ -264,4 +266,53 @@ def test_model_trainer_uses_active_mlflow_run(
         datasets,
         config,
         run_id="mlflow-run-123",
+    )
+
+def test_model_evaluator_satisfies_contract() -> None:
+    assert isinstance(
+        adapters.ChurnModelEvaluator(),
+        ModelEvaluator,
+    )
+
+
+def test_model_evaluator_delegates_candidate_evaluation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    datasets = build_splits()
+    training_result = TrainingResult(
+        model=object(),
+        run_id="run-123",
+        metrics={
+            "f1_score": 0.8,
+        },
+    )
+    expected = EvaluationResult(
+        metrics={
+            "f1_score": 0.8,
+        },
+        approved=True,
+    )
+    config = {
+        "environment": "test",
+    }
+
+    evaluate = MagicMock(
+        return_value=expected
+    )
+    monkeypatch.setattr(
+        adapters,
+        "evaluate_model_candidate",
+        evaluate,
+    )
+
+    result = adapters.ChurnModelEvaluator().evaluate(
+        training_result,
+        datasets,
+        config,
+    )
+
+    assert result is expected
+    evaluate.assert_called_once_with(
+        training_result,
+        config,
     )

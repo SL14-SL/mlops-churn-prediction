@@ -22,7 +22,11 @@ from mlops_churn_prediction.tracking.mlflow import (
 from mlops_churn_prediction.training.candidate import (
     train_model_candidate,
 )
+from mlops_churn_prediction.training.candidate_evaluation import (
+    evaluate_model_candidate,
+)
 from mlops_churn_prediction.training.contracts import (
+    EvaluationResult,
     TrainingResult,
 )
 
@@ -88,4 +92,21 @@ class ChurnModelTrainer:
             datasets,
             config,
             run_id=run_id,
+        )
+
+class ChurnModelEvaluator:
+    """Adapt churn candidate evaluation to the shared contract."""
+
+    def evaluate(
+        self,
+        training_result: TrainingResult,
+        datasets: DatasetSplits,
+        config: Mapping[str, Any],
+    ) -> EvaluationResult:
+        """Evaluate the freshly trained churn candidate."""
+        del datasets
+
+        return evaluate_model_candidate(
+            training_result,
+            config,
         )
