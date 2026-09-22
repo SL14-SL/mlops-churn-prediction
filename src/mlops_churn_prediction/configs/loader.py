@@ -94,3 +94,39 @@ def get_path(
         )
 
     return str(paths[name])
+
+def _merge_config(
+    base: dict[str, Any],
+    override: dict[str, Any],
+) -> dict[str, Any]:
+    """Recursively merge two configuration mappings."""
+    merged = dict(base)
+
+    for key, value in override.items():
+        existing = merged.get(key)
+
+        if (
+            isinstance(existing, dict)
+            and isinstance(value, dict)
+        ):
+            merged[key] = _merge_config(
+                existing,
+                value,
+            )
+        else:
+            merged[key] = value
+
+    return merged
+
+
+def load_training_config() -> dict[str, Any]:
+    """Load the merged environment and training configuration."""
+    environment_config = load_config()
+    training_config = load_config(
+        "training.yaml"
+    )
+
+    return _merge_config(
+        environment_config,
+        training_config,
+    )

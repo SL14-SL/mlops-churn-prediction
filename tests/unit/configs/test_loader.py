@@ -243,3 +243,86 @@ def test_get_path_rejects_unknown_path(
         match="Path 'processed' not found",
     ):
         loader.get_path("processed", "example.yaml")
+
+def test_load_training_config_merges_sections(
+    monkeypatch,
+) -> None:
+    environment_config = {
+        "environment": "dev",
+        "model": {
+            "registry_name": (
+                "churn-prediction-model-dev"
+            ),
+        },
+        "tracking": {
+            "mlflow_tracking_uri": (
+                "http://localhost:5000"
+            ),
+        },
+        "paths": {
+            "models": "models",
+            "pipeline_runs": (
+                "data/pipeline-runs"
+            ),
+        },
+    }
+    training_config = {
+        "environment": "dev",
+        "model": {
+            "type": "gradient_boosting",
+            "params": {
+                "n_estimators": 200,
+            },
+        },
+        "data": {
+            "target_column": "Churn",
+        },
+        "features": {
+            "drop_columns": [
+                "customerid",
+            ],
+        },
+    }
+
+    def fake_load_config(
+        config_name=None,
+    ):
+        if config_name == "training.yaml":
+            return training_config
+
+        return environment_config
+
+    monkeypatch.setattr(
+        loader,
+        "load_config",
+        fake_load_config,
+    )
+
+    result = (
+        loader.load_training_config()
+    )
+
+    assert result["environment"] == "dev"
+    assert result["model"] == {
+        "registry_name": (
+            "churn-prediction-model-dev"
+        ),
+        "type": "gradient_boosting",
+        "params": {
+            "n_estimators": 200,
+        },
+    }
+    assert result["data"] == {
+        "target_column": "Churn",
+    }
+    assert result["features"] == {
+        "drop_columns": [
+            "customerid",
+        ],
+    }
+    assert result["paths"] == {
+        "models": "models",
+        "pipeline_runs": (
+            "data/pipeline-runs"
+        ),
+    }
