@@ -10,7 +10,6 @@ from pathlib import Path, PurePosixPath
 import fsspec
 import joblib
 import mlflow
-import numpy as np
 import pandas as pd
 from sklearn.metrics import (
     accuracy_score,
@@ -28,6 +27,7 @@ from mlops_churn_prediction.configs.loader import (
 from mlops_churn_prediction.storage.filesystem import ensure_dir
 from mlops_churn_prediction.training.explainability import log_feature_importance, log_shap_summary
 from mlops_churn_prediction.training.model_factory import build_model, fit_model, log_model_by_type
+from mlops_churn_prediction.training.candidate import find_best_threshold
 from mlops_churn_prediction.training.preparation import normalize_feature_dtypes
 from mlops_churn_prediction.utils.logger import get_logger
 
@@ -123,46 +123,6 @@ def _log_feature_schema_artifact(feature_schema: dict) -> None:
             json.dump(feature_schema, f, indent=2)
 
         mlflow.log_artifact(str(local_path), artifact_path="feature_schema")
-
-
-def find_best_threshold(
-    y_true,
-    y_proba,
-    *,
-    metric: str = "f1",
-    thresholds: np.ndarray | None = None,
-) -> tuple[float, float]:
-    """
-    Find the best classification threshold on validation data.
-
-    Args:
-        y_true: Ground-truth labels.
-        y_proba: Predicted churn probabilities.
-        metric: Optimization metric. Currently supports "f1".
-        thresholds: Candidate thresholds.
-
-    Returns:
-        Best threshold and best metric score.
-    """
-    if thresholds is None:
-        thresholds = np.arange(0.10, 0.91, 0.01)
-
-    best_threshold = 0.5
-    best_score = -1.0
-
-    for threshold in thresholds:
-        y_pred = (y_proba >= threshold).astype(int)
-
-        if metric == "f1":
-            score = f1_score(y_true, y_pred, zero_division=0)
-        else:
-            raise ValueError(f"Unsupported threshold metric: {metric}")
-
-        if score > best_score:
-            best_score = score
-            best_threshold = float(threshold)
-
-    return best_threshold, float(best_score)
 
 
 def train(
