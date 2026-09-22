@@ -16,6 +16,9 @@ from mlops_churn_prediction.data.raw.ingest import (
 from mlops_churn_prediction.data.splits.split import (
     split_features,
 )
+from mlops_churn_prediction.training.model_factory import (
+    log_model_by_type,
+)
 from mlops_churn_prediction.tracking.mlflow import (
     get_active_training_run_id,
 )
@@ -109,4 +112,41 @@ class ChurnModelEvaluator:
         return evaluate_model_candidate(
             training_result,
             config,
+        )
+
+class ChurnModelArtifactLogger:
+    """Log a trained churn candidate to the active MLflow run."""
+
+    def log_model(
+        self,
+        training_result: TrainingResult,
+        *,
+        artifact_path: str,
+        config: Mapping[str, Any],
+    ) -> str:
+        """Log the wrapped churn model and return its MLflow URI."""
+        del config
+
+        model_type = training_result.parameters.get(
+            "model_type"
+        )
+
+        if (
+            not isinstance(model_type, str)
+            or not model_type.strip()
+        ):
+            raise ValueError(
+                "Churn training result must contain "
+                "a model type."
+            )
+
+        return log_model_by_type(
+            training_result.model,
+            model_type,
+            artifact_path=artifact_path,
+            metadata={
+                "training_run_id": (
+                    training_result.run_id
+                ),
+            },
         )

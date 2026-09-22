@@ -62,24 +62,52 @@ def fit_model(model, model_type: str, X_train, y_train, X_val, y_val):
 def log_model_by_type(
     model,
     model_type: str,
+    *,
+    artifact_path: str = "model",
     input_example=None,
     metadata: dict | None = None,
     signature=None,
-):
+) -> str:
+    """Log a wrapped churn model and return its MLflow model URI."""
     if model_type not in MODEL_LOGGERS:
-        raise ValueError(f"Unsupported model type for logging: {model_type}")
+        raise ValueError(
+            "Unsupported model type for logging: "
+            f"{model_type}"
+        )
 
-    kwargs = {"metadata": metadata or {}}
+    kwargs = {
+        "metadata": metadata or {},
+    }
+
     if input_example is not None:
         kwargs["input_example"] = input_example
+
     if signature is not None:
         kwargs["signature"] = signature
 
-    # Wrap model so that predict() returns probabilities
-    wrapped_model = ChurnModelWrapper(model)
+    wrapped_model = ChurnModelWrapper(
+        model
+    )
 
-    mlflow.pyfunc.log_model(
-        artifact_path="model",
+    logged_model = mlflow.pyfunc.log_model(
+        artifact_path=artifact_path,
         python_model=wrapped_model,
         **kwargs,
     )
+
+    model_uri = getattr(
+        logged_model,
+        "model_uri",
+        None,
+    )
+
+    if (
+        not isinstance(model_uri, str)
+        or not model_uri.strip()
+    ):
+        raise ValueError(
+            "MLflow model logging did not return "
+            "a model URI."
+        )
+
+    return model_uri
