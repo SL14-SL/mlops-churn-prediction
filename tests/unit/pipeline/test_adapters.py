@@ -10,6 +10,10 @@ from mlops_churn_prediction.data.contracts import (
     DatasetSplitter,
     FeatureBuilder,
 )
+from mlops_churn_prediction.training.contracts import (
+    ModelTrainer,
+    TrainingResult,
+)
 from mlops_churn_prediction.pipeline import (
     adapters,
 )
@@ -201,4 +205,63 @@ def test_splitter_delegates_to_split_features(
     split.assert_called_once_with(
         features,
         config,
+    )
+
+def test_model_trainer_satisfies_contract() -> None:
+    assert isinstance(
+        adapters.ChurnModelTrainer(),
+        ModelTrainer,
+    )
+
+
+def test_model_trainer_uses_active_mlflow_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    datasets = build_splits()
+    config = {
+        "data": {
+            "target_column": "churn",
+        },
+        "model": {
+            "type": "xgboost",
+            "params": {},
+        },
+    }
+    expected = TrainingResult(
+        model=object(),
+        run_id="mlflow-run-123",
+        metrics={
+            "f1_score": 0.85,
+        },
+    )
+
+    get_run_id = MagicMock(
+        return_value="mlflow-run-123"
+    )
+    train_candidate = MagicMock(
+        return_value=expected
+    )
+
+    monkeypatch.setattr(
+        adapters,
+        "get_active_training_run_id",
+        get_run_id,
+    )
+    monkeypatch.setattr(
+        adapters,
+        "train_model_candidate",
+        train_candidate,
+    )
+
+    result = adapters.ChurnModelTrainer().train(
+        datasets,
+        config,
+    )
+
+    assert result is expected
+    get_run_id.assert_called_once_with()
+    train_candidate.assert_called_once_with(
+        datasets,
+        config,
+        run_id="mlflow-run-123",
     )

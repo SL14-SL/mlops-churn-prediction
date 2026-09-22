@@ -16,6 +16,15 @@ from mlops_churn_prediction.data.raw.ingest import (
 from mlops_churn_prediction.data.splits.split import (
     split_features,
 )
+from mlops_churn_prediction.tracking.mlflow import (
+    get_active_training_run_id,
+)
+from mlops_churn_prediction.training.candidate import (
+    train_model_candidate,
+)
+from mlops_churn_prediction.training.contracts import (
+    TrainingResult,
+)
 
 
 class ChurnDataIngestor:
@@ -62,4 +71,21 @@ class ChurnDatasetSplitter:
         return split_features(
             features,
             config,
+        )
+
+class ChurnModelTrainer:
+    """Adapt churn model fitting to the shared contract."""
+
+    def train(
+        self,
+        datasets: DatasetSplits,
+        config: Mapping[str, Any],
+    ) -> TrainingResult:
+        """Train a candidate in the active MLflow run."""
+        run_id = get_active_training_run_id()
+
+        return train_model_candidate(
+            datasets,
+            config,
+            run_id=run_id,
         )
