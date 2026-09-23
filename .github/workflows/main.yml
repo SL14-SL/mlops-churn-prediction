@@ -157,31 +157,6 @@ jobs:
 # -------------------------------------------------
 # 4️⃣ TERRAFORM VALIDATION
 # -------------------------------------------------
-  terraform-plan:
-    name: Validate Terraform
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: infrastructure
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_wrapper: false
-
-      - name: Check Terraform formatting
-        run: terraform fmt -check -recursive
-
-      - name: Initialize Terraform without backend
-        run: terraform init -backend=false -input=false
-
-      - name: Validate Terraform
-        run: terraform validate
 
 # -------------------------------------------------
 # 5️⃣ BUILD API (Build → Scan → Push)

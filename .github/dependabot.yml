@@ -37,3 +37,20 @@ updates:
       timezone: Europe/Berlin
     open-pull-requests-limit: 5
 
+  - package-ecosystem: terraform
+    directory: /infrastructure/terraform
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:45"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: terraform
+    directory: /infrastructure/terraform-bootstrap
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
