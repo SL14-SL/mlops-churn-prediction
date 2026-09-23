@@ -239,11 +239,13 @@ MLflow tracks parameters, metrics, artifacts and model lineage. Classification m
 
 Dataset versions, configuration hashes and Git commits connect each registered model and serving release to the code and data used to create it.
 
-The screenshots below show the verified production lifecycle. MLflow stores
-experiment and registry metadata in Cloud SQL for PostgreSQL, while model
-artifacts remain in Google Cloud Storage. The registered production model uses
-a versioned `champion` alias and retains its run lineage across Cloud Run
-revision replacement.
+The screenshots below show a verified model lifecycle with persistent MLflow
+tracking and registry state. The registered model uses a versioned `champion`
+alias and retains its run lineage independently of prediction-API revisions.
+
+In the current deployment architecture, MLflow is operated as an external
+platform with its own persistent metadata database and artifact store. This
+repository does not provision the MLflow platform.
 
 <p align="center">
   <img
@@ -450,58 +452,40 @@ the production Champion.
 
 ## 🚀 CI/CD and Cloud Deployment
 
-GitHub Actions validates and deploys the project on pushes to `main`.
+GitHub Actions separates continuous verification from explicit cloud
+deployment.
 
-The pipeline includes:
+The verification workflows include:
 
 - Ruff linting
 - unit and integration tests
-- API smoke tests
-- Terraform validation and planning
-- API and MLflow image builds
-- Trivy vulnerability scanning
-- Artifact Registry publishing
-- Cloud Run deployment
-- Workload Identity Federation authentication
+- API container smoke tests
+- Python dependency auditing
+- repository and container vulnerability scanning
+- Terraform formatting and validation
 
-The API image is deployed with an immutable Git SHA tag. Infrastructure is managed through Terraform.
+Cloud deployment is started manually through `deploy.yml`. The workflow uses
+Workload Identity Federation for keyless Google Cloud authentication and
+Terraform for infrastructure changes.
 
-Cloud build and deployment jobs are gated by the GitHub repository variable
-`DEPLOY_GCP`. Linting, tests and the local API smoke test continue to run while
-cloud deployment is disabled.
+Every deployment:
 
-Enable cloud deployment only after Terraform has provisioned the required
-resources:
+1. initializes the environment-specific remote Terraform state;
+2. plans the foundational Google Cloud infrastructure;
+3. builds and publishes an immutable API image tagged with the Git commit SHA;
+4. produces a human-readable Cloud Run deployment plan;
+5. applies that plan only when `apply_changes=true`.
 
-```bash
-gh variable set DEPLOY_GCP --body true
-```
+Cloud Run revision rollback is handled separately through `rollback.yml`.
 
-Disable it before destroying the infrastructure:
+MLflow is treated as an independently operated platform dependency rather than
+being provisioned by this repository. A production deployment must configure
+`MLFLOW_TRACKING_URI` with the URL of a persistent MLflow service backed by a
+production-appropriate metadata database and artifact store.
 
-```bash
-gh variable set DEPLOY_GCP --body false
-```
+See [Google Cloud deployment](docs/cloud-deployment.md) for bootstrap,
+configuration, deployment, verification, rollback and teardown instructions.
 
-<p align="center">
-  <img src="docs/images/ci_pipeline.png" width="100%" alt="GitHub Actions pipeline">
-</p>
-
-<p align="center">
-  <img
-    src="docs/images/cloud_run_mlflow_cloud_sql.png"
-    width="100%"
-    alt="MLflow Cloud Run service connected to Cloud SQL and GCS"
-  >
-</p>
-
-<p align="center">
-  <em>
-    MLflow on Cloud Run using Cloud SQL for persistent tracking metadata,
-    Secret Manager for database credentials and GCS for model artifacts.
-  </em>
-</p>
----
 
 ## 🔒 Security and Reliability
 
@@ -533,8 +517,8 @@ gh variable set DEPLOY_GCP --body false
 ### Platform and operations
 
 - Docker and Docker Compose
-- PostgreSQL
-- Cloud SQL for PostgreSQL
+- PostgreSQL for the local MLflow stack
+- externally operated persistent MLflow platform
 - Google Secret Manager
 - Prometheus
 - Grafana
@@ -707,92 +691,47 @@ written below `results/churn_retraining_comparison/`.
 
 ## ☁️ Production Bootstrap and Verification
 
-Production infrastructure is provisioned with Terraform:
+Google Cloud deployment is intentionally separated into bootstrap and
+environment infrastructure:
+
+- `infrastructure/terraform-bootstrap` creates the protected Terraform state
+  bucket and GitHub Workload Identity Federation resources;
+- `infrastructure/terraform` provisions Artifact Registry, GCS, Secret Manager
+  and the Cloud Run prediction API.
+
+The prediction API connects to an externally operated persistent MLflow service
+through `MLFLOW_TRACKING_URI`. The MLflow platform owner is responsible for its
+metadata database, artifact store, credentials, backups and recovery process.
+
+Complete bootstrap, GitHub Environment and manual deployment instructions are
+documented in
+[docs/cloud-deployment.md](docs/cloud-deployment.md).
+
+Validate both Terraform modules locally:
 
 ```bash
-terraform -chdir=infrastructure init
-terraform -chdir=infrastructure fmt -check
-terraform -chdir=infrastructure validate
-terraform -chdir=infrastructure plan
-terraform -chdir=infrastructure apply
+make terraform-validate
 ```
 
-### Cost-conscious persistent MLflow backend
-
-The Google Cloud demonstration uses a persistent MLflow architecture:
-
-- MLflow runs as a Cloud Run service;
-- experiment, run and registry metadata are stored in Cloud SQL for PostgreSQL;
-- model artifacts are stored in Google Cloud Storage;
-- immutable serving releases are stored separately in GCS;
-- the database password is supplied through Secret Manager;
-- Cloud Run can scale to zero and is limited to one MLflow instance.
-
-This keeps the registered model, `champion` alias and run metadata available
-across Cloud Run instance termination and revision replacement. Persistence was
-verified by deploying a new MLflow revision and confirming that the same model
-version, run ID and GCS artifact URI remained available.
-
-Cloud SQL is the main continuously billable component. The infrastructure is
-therefore provisioned only for the production demonstration and destroyed after
-the verification evidence has been captured.
-
-<p align="center">
-  <img
-    src="docs/images/mlflow_persistence_verification.png"
-    width="100%"
-    alt="MLflow persistence verification after Cloud Run revision replacement"
-  >
-</p>
-
-<p align="center">
-  <em>
-    Registered churn model, champion version, completed run and GCS artifact
-    location verified after replacing the MLflow Cloud Run revision.
-  </em>
-</p>
-
-Required production values are loaded from `.env`, GitHub Variables and GitHub Secrets. Validate the non-secret configuration locally:
+After deployment, obtain the API URL and verify its probes:
 
 ```bash
-make debug-prod-env
-make check-prod-env
-```
-
-For an empty production registry:
-
-```bash
-make train-bootstrap-prod
-```
-
-For later forced production training:
-
-```bash
-make train-force-prod
-```
-
-Verify the deployed API:
-
-```bash
-make predict-test-prod
-```
-
-Or inspect the probes directly:
-
-```bash
-API_URL="$(terraform -chdir=infrastructure output -raw prediction_api_url)"
+API_URL="$(
+  terraform \
+    -chdir=infrastructure/terraform \
+    output \
+    -raw cloud_run_service_uri
+)"
 
 curl -fsS "$API_URL/livez" | jq .
 curl -fsS "$API_URL/readyz" | jq .
 curl -fsS "$API_URL/health" | jq .
 ```
 
-`train-bootstrap-prod` is intended only for a fresh production registry. Once a
-Champion exists, use the normal production training path.
-
-A new MLflow Cloud Run revision does not require another bootstrap because
-registry metadata is stored persistently in Cloud SQL. Bootstrap remains
-reserved for an empty production registry.
+The production registry must already contain the model version referenced by
+the active serving release. `train-bootstrap-prod` is reserved for an empty
+external registry. Once a Champion exists, use the normal production training
+path.
 
 ---
 
@@ -844,7 +783,7 @@ Detailed architecture and operational documentation is available in:
 
 - [System architecture](docs/architecture.md)
 - [Local development](docs/local-development.md)
-- [Google Cloud production demo](docs/production-demo.md)
+- [Google Cloud deployment](docs/cloud-deployment.md)
 - [Serving releases and rollback](docs/serving-releases.md)
 - [Automatic retraining policy](docs/retraining-policy.md)
 - [Monitoring, SLOs and alerting](docs/monitoring-and-slos.md)
@@ -887,7 +826,7 @@ This repository is a production-oriented portfolio blueprint, not a fully manage
 For a regulated or large-scale deployment, further controls may include:
 
 - private networking and authenticated Cloud Run ingress
-- automated Cloud SQL backup and disaster-recovery verification
+- verified backup and disaster recovery for the external MLflow platform
 - centralized secret rotation
 - organization-wide audit logging
 - formal privacy and retention policies
@@ -895,12 +834,11 @@ For a regulated or large-scale deployment, further controls may include:
 - multi-region recovery objectives
 - staged traffic splitting or shadow deployment
 
-The current cloud setup intentionally favors a compact, reproducible
-demonstration while implementing the central safety patterns of a production ML
-lifecycle. MLflow metadata is persisted in Cloud SQL and model artifacts are
-stored in GCS. The infrastructure is nevertheless operated temporarily to limit
-ongoing costs and is not presented as a continuously operated enterprise
-platform.
+The current cloud setup intentionally favors a compact, reproducible API
+deployment while implementing the central safety patterns of a production ML
+lifecycle. Persistent experiment tracking and model-registry operation remain
+the responsibility of the external MLflow platform. The setup is not presented
+as a continuously operated enterprise platform.
 
 ---
 

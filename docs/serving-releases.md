@@ -7,8 +7,9 @@ require the matching feature schema, decision threshold, preprocessing contract
 and lineage metadata.
 
 MLflow and the serving-release repository have separate responsibilities.
-MLflow stores training lineage and registered model versions, backed by
-persistent Cloud SQL metadata and GCS model artifacts. A serving release binds
+MLflow stores training lineage and registered model versions. In production,
+it must be operated separately with a persistent metadata database and durable
+object storage. A serving release binds
 one exact numeric model version to the matching feature schema, decision
 threshold and semantic prediction probe.
 
@@ -60,8 +61,9 @@ Candidate evaluation and production registration produce explicit MLflow run
 and model lineage. Only an accepted model is registered and assigned the
 production `champion` alias.
 
-MLflow stores experiment, run, model-version and alias metadata in Cloud SQL
-for PostgreSQL. The corresponding model artifacts remain in GCS.
+The external MLflow service stores experiment, run, model-version and alias
+metadata in its persistent database. Corresponding model artifacts must remain
+available through its configured durable artifact store.
 
 A serving manifest records the exact numeric model version and run ID selected
 for the release. Runtime loading therefore does not depend on later changes to
@@ -237,7 +239,7 @@ Tests cover:
 ## Related Documentation
 
 - [Architecture](architecture.md)
-- [Production demo](production-demo.md)
+- [Google Cloud deployment](cloud-deployment.md)
 - [Monitoring and SLOs](monitoring-and-slos.md)
 - [Operations runbook](operations-runbook.md)
 
