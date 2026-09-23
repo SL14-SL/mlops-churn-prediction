@@ -3,7 +3,7 @@
 ## 1. Purpose
 
 This runbook describes how to diagnose and respond to incidents affecting the
-customer-churn platform locally or in the Google Cloud production demo.
+customer-churn platform locally or in a Google Cloud production environment.
 
 It covers:
 
@@ -35,7 +35,7 @@ export API_BASE_URL="http://localhost:8000"
 export PROMETHEUS_URL="http://localhost:9090"
 ```
 
-### 3.2 Google Cloud production demo
+### 3.2 Google Cloud production environment
 
 Load the project environment without printing secrets:
 
@@ -50,8 +50,10 @@ export MLFLOW_BASE_URL="${MLFLOW_UI_URL%/}"
 export PROMETHEUS_URL="http://localhost:9090"
 ```
 
-The default production demo is observed by the local Prometheus stack. Keep the
-local Prometheus URL unless cloud monitoring was deployed separately.
+The production API can be observed through a separately operated monitoring
+stack. Set `PROMETHEUS_URL` to the appropriate endpoint for the incident
+environment. The local URL is suitable only when the local monitoring stack is
+scraping the production API.
 
 Validate context:
 
@@ -88,42 +90,16 @@ gcloud run services describe churn-prediction-api \
   --region "$GCP_REGION" \
   --format='yaml(metadata.name,status.url,status.traffic,status.conditions)'
 
-gcloud run services describe mlflow-server \
-  --project "$GCP_PROJECT_ID" \
-  --region "$GCP_REGION" \
-  --format='yaml(metadata.name,status.url,status.traffic,status.conditions)'
-```
-
-#### Persistent MLflow backend
-
-When tracking, registry access or model loading is affected, inspect Cloud SQL:
+The MLflow service is operated independently from this repository. Verify its
+configured endpoint:
 
 ```bash
-gcloud sql instances describe mlflow-postgres-dev \
-  --project "$GCP_PROJECT_ID" \
-  --format='yaml(
-    name,
-    state,
-    region,
-    databaseVersion,
-    connectionName,
-    settings.tier,
-    settings.activationPolicy
-  )'
+curl -fsS "${MLFLOW_BASE_URL}/health"
 ```
 
-Expected state while the demonstration is active:
-
-- the instance exists;
-- `state` is `RUNNABLE`;
-- `databaseVersion` identifies PostgreSQL;
-- `connectionName` matches the connection configured for MLflow.
-
-Check MLflow independently:
-
-```bash
-curl -i "${MLFLOW_BASE_URL}/health"
-```
+If this check fails, use the operational runbook of the MLflow platform and
+contact its owning team. The API deployment workflow does not provision or
+repair the MLflow metadata database or artifact store.
 
 A successful health response does not prove that registry data is available.
 Verify the registered model and `champion` alias as well:
@@ -295,17 +271,15 @@ The process is alive, but no complete bundle is active.
 
 Potential causes:
 
-- empty or lost MLflow registry;
+- empty or unavailable MLflow registry;
 - missing active release pointer;
 - invalid manifest;
 - missing feature schema or prediction probe;
 - checksum failure;
-- unavailable numeric model version;
-- MLflow or GCS IAM failure;
-- the MLflow Cloud Run service cannot access Cloud SQL;
-- the registered model or numeric model version is missing;
-- Secret Manager access to the database password fails;
-- MLflow cannot access the model artifact in GCS.
+- unavailable registered model or numeric model version;
+- the external MLflow service or its metadata database is unavailable;
+- the external MLflow artifact store cannot be accessed;
+- API credentials, network access or IAM prevent registry or artifact loading.
 
 ### Diagnosis
 
@@ -334,47 +308,23 @@ gcloud storage cat \
 Inspect the selected manifest with `gcloud storage cat` and compare its numeric
 model version with the MLflow registry.
 
-Check the complete MLflow dependency chain:
+Check the external MLflow dependency chain:
 
 ```bash
 curl -fsS "${MLFLOW_BASE_URL}/health"
-
-gcloud sql instances describe mlflow-postgres-dev \
-  --project "$GCP_PROJECT_ID" \
-  --format='value(state,connectionName,settings.activationPolicy)'
-
-gcloud run services describe mlflow-server \
-  --project "$GCP_PROJECT_ID" \
-  --region "$GCP_REGION" \
-  --format='yaml(
-    status.url,
-    status.conditions,
-    template.annotations,
-    template.containers.env
-  )'
 ```
 
 Verify that:
 
-1. MLflow is healthy;
-2. Cloud SQL is running;
-3. the MLflow service references the expected Cloud SQL connection;
-4. the password is obtained through Secret Manager;
-5. the required model version exists;
-6. its artifact URI points to the expected GCS bucket;
-7. the serving manifest references the same version and run ID.
+1. the configured MLflow endpoint is healthy;
+2. the required registered model and numeric version exist;
+3. the model artifact can be read from the configured artifact store;
+4. the serving manifest references the same model version and run ID;
+5. API credentials and network access permit registry and artifact loading.
 
-Inspect recent MLflow errors:
+Use the external MLflow platform's own logs and operational runbook for
+database, storage or service-level diagnosis.
 
-```bash
-gcloud logging read \
-  'resource.type="cloud_run_revision"
-   AND resource.labels.service_name="mlflow-server"
-   AND severity>=ERROR' \
-  --project "$GCP_PROJECT_ID" \
-  --freshness=30m \
-  --limit=100
-```
 
 ### Immediate actions
 
@@ -387,8 +337,8 @@ curl -fsS -X POST \
   | jq .
 ```
 
-- Restore Cloud SQL availability without recreating the database.
-- Verify the Terraform-managed Cloud SQL connection and Secret Manager reference.
+- Escalate MLflow, database or artifact-store outages to the platform owner.
+- Confirm registry and artifact availability before retrying the bundle reload.
 - Retry the bundle reload only after MLflow registry access is confirmed.
 - Prefer rollback when the active release references an unavailable model version.
 - Do not bootstrap a replacement model because of temporary registry unavailability.
@@ -422,12 +372,11 @@ Escalate when:
 
 - multiple serving releases are damaged;
 - the previous release also cannot be loaded;
-- Cloud SQL reports storage, authentication or connectivity errors;
 - MLflow is healthy but registered models or aliases are missing;
-- the model version exists but its GCS artifact cannot be loaded;
-- Secret Manager or IAM changes are required;
-- recovery would require database restoration, credential rotation or
-  destructive Terraform changes.
+- the model version exists but its artifact cannot be loaded;
+- the external MLflow platform reports metadata or artifact-store failures;
+- MLflow credentials, network access or platform IAM changes are required;
+- recovery requires metadata-database restoration or credential rotation.
 
 ## 7. ChurnPredictionServerErrorRateHigh
 
@@ -613,8 +562,8 @@ Close an incident only when:
 - active release lineage is recorded;
 - affected alerts return to `inactive`;
 - metrics remain stable for at least one alert window;
-- emergency Cloud Run, Cloud SQL, Secret Manager or IAM changes are reconciled
-  with Terraform and CI/CD.
+- emergency API infrastructure changes are reconciled with Terraform and CI/CD;
+- external MLflow platform changes are recorded by its owning team.
 
 Document:
 
@@ -622,11 +571,11 @@ Document:
 - start and end time;
 - alert and severity;
 - Cloud Run revision where applicable;
-- MLflow Cloud Run revision when tracking or model loading was affected;
-- Cloud SQL instance state and connection status;
+- external MLflow service state when tracking or model loading was affected;
+- MLflow metadata-database and artifact-store availability;
 - release ID before and after remediation;
 - model version and run ID;
-- whether the MLflow registry and GCS artifact remained available;
+- whether the MLflow registry and configured artifact store remained available;
 - whether Secret Manager or IAM contributed to the incident;
 - root cause;
 - actions and verification evidence;
@@ -637,7 +586,7 @@ Document:
 
 - [System architecture](architecture.md)
 - [Local development](local-development.md)
-- [Google Cloud production demo](production-demo.md)
+- [Google Cloud deployment](cloud-deployment.md)
 - [Serving releases](serving-releases.md)
 - [Monitoring, SLOs and alerting](monitoring-and-slos.md)
 

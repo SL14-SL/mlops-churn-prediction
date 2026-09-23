@@ -32,10 +32,9 @@ flowchart TD
 | Data pipeline | Schema validation, preprocessing and feature construction | Validated data and feature tables |
 | Dataset versioning | Stable dataset identity and lineage metadata | Dataset snapshots and metadata |
 | Prefect | Training and retraining orchestration | Flow and task-run metadata |
-| MLflow | Experiments, metrics and registered model versions | Cloud SQL metadata and GCS artifacts |
-| Cloud SQL | Persistent PostgreSQL backend for MLflow | Experiments, runs, model versions and aliases |
-| GCS | MLflow artifacts, datasets and immutable serving releases | Versioned objects |
-| Secret Manager | Supplies the MLflow database password | Versioned database credential |
+| MLflow | Experiments, metrics and registered model versions | Externally operated metadata database and artifact store |
+| GCS | Datasets, serving artifacts and immutable serving releases | Versioned objects |
+| Secret Manager | Supplies the API key to Cloud Run | Versioned API credential |
 | Serving release storage | Immutable manifests and inference artifacts | Versioned release directories and active pointer |
 | FastAPI | Request validation, inference and business decisions | Process-local active `ServingBundle` |
 | Prediction logger | Prediction, lineage and decision logging | Current log and date-partitioned history |
@@ -140,42 +139,26 @@ Docker Compose starts:
 The Streamlit dashboard can also be exposed by the project stack. Local runtime
 directories hold data, models, monitoring output and serving releases.
 
-### Google Cloud demonstration
+### Google Cloud production
 
-The cloud demonstration uses:
+This repository provisions and deploys the prediction API and its supporting
+Google Cloud resources:
 
-- Cloud Run for MLflow and `churn-prediction-api`;
-- Cloud SQL for PostgreSQL as the persistent MLflow tracking backend;
-- Secret Manager for the MLflow database password;
+- Cloud Run for `churn-prediction-api`;
 - Artifact Registry for container images;
-- GCS for raw data, MLflow artifacts, dataset snapshots and serving releases;
-- Prefect Cloud for production flow observability;
-- Terraform for provisioning;
-- GitHub Actions with Workload Identity Federation for deployment.
+- GCS for datasets, serving artifacts and immutable releases;
+- Secret Manager for the API key;
+- Terraform for infrastructure provisioning;
+- GitHub Actions with Workload Identity Federation for keyless deployment.
 
-MLflow stores experiment, run, registered-model and alias metadata in Cloud
-SQL. Model artifacts remain in GCS. This separation keeps the production
-registry persistent across Cloud Run instance termination, scale-to-zero and
-revision replacement.
+Production model loading depends on an externally operated persistent MLflow
+service configured through `MLFLOW_TRACKING_URI`. The owning platform is
+responsible for the MLflow service, its metadata database, artifact storage,
+backups, credentials and recovery procedures.
 
-The MLflow Cloud Run service is limited to one instance and can scale to zero.
-Cloud SQL remains the main continuously billable component and is provisioned
-only for the duration of the production demonstration.
-
-<p align="center">
-  <img
-    src="images/cloud_run_mlflow_cloud_sql.png"
-    width="100%"
-    alt="Persistent MLflow architecture on Google Cloud"
-  >
-</p>
-
-<p align="center">
-  <em>
-    MLflow on Cloud Run with Cloud SQL metadata, Secret Manager credentials
-    and GCS artifact storage.
-  </em>
-</p>
+The API deployment does not provision or modify the external MLflow platform.
+A serving release references an immutable numeric MLflow model version and
+retains the corresponding run lineage.
 
 ## Trust Boundaries
 
@@ -184,6 +167,7 @@ only for the duration of the production demonstration.
 | Client to API | API key and Pydantic request validation |
 | GitHub Actions to GCP | Workload Identity Federation |
 | API/training process to GCS | Service account and bucket IAM |
+| API/training process to MLflow | Configured endpoint, credentials and network access |
 | Release activation | Manifest validation, path containment and checksums |
 | Model replacement | Load-before-swap bundle activation |
 | Deployment completion | Readiness and semantic prediction verification |
@@ -202,7 +186,7 @@ from the reusable operational architecture.
 ## Related Documentation
 
 - [Local development](local-development.md)
-- [Production demo](production-demo.md)
+- [Google Cloud deployment](cloud-deployment.md)
 - [Serving releases](serving-releases.md)
 - [Retraining policy](retraining-policy.md)
 - [Monitoring and SLOs](monitoring-and-slos.md)
