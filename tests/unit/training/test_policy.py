@@ -1,4 +1,4 @@
-from src.training.policy import should_skip_training, get_run_strategy, should_refresh_api
+from mlops_churn_prediction.training.policy import should_skip_training, get_run_strategy, should_refresh_api
 
 
 def test_should_skip_training_returns_true_when_stable_and_not_forced():

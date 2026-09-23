@@ -17,11 +17,11 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 
-from src.configs.loader import (
+from mlops_churn_prediction.configs.loader import (
     get_path,
     load_config,
 )
-from src.training.train import (
+from mlops_churn_prediction.training.train import (
     normalize_feature_dtypes,
 )
 

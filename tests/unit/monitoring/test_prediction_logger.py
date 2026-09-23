@@ -2,16 +2,16 @@ import pandas as pd
 
 from unittest.mock import patch
 
-from src.monitoring.prediction_logger import log_prediction, normalize_prediction_log_schema
+from mlops_churn_prediction.monitoring.prediction_logger import log_prediction, normalize_prediction_log_schema
 
 
 def test_production_prediction_uses_structured_logging_only():
     with (
         patch(
-            "src.monitoring.prediction_logger.file_exists"
+            "mlops_churn_prediction.monitoring.prediction_logger.file_exists"
         ) as mock_file_exists,
         patch(
-            "src.monitoring.prediction_logger.pd.DataFrame.to_parquet"
+            "mlops_churn_prediction.monitoring.prediction_logger.pd.DataFrame.to_parquet"
         ) as mock_to_parquet,
     ):
         log_prediction(

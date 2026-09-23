@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.configs.loader import ensure_dir, file_exists, get_path
-from src.monitoring.config import get_business_settings
+from mlops_churn_prediction.configs.loader import get_path
+from mlops_churn_prediction.storage.filesystem import (
+    ensure_dir,
+    file_exists,
+)
+from mlops_churn_prediction.monitoring.config import get_business_settings
 
 
 PREDICTIONS_PATH = get_path("predictions")

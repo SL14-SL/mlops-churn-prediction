@@ -58,9 +58,9 @@ services:
     build: .
     user: "${UID}:${GID}"
     ports:
-      - "8000:8080"
+      - "${API_PORT:-8000}:8080"
     environment:
-      PYTHONPATH: /app
+      PYTHONPATH: /app/src:/app
       MLFLOW_TRACKING_URI: http://mlflow:5000
       PREFECT_API_URL: http://prefect:4200/api
       PREFECT_HOME: /tmp/prefect
@@ -109,7 +109,7 @@ services:
     ports:
       - "8501:8501"
     environment:
-      PYTHONPATH: /app
+      PYTHONPATH: /app/src:/app
       HOME: /tmp
       APP_ENV: dev
       MLFLOW_TRACKING_URI: http://mlflow:5000
@@ -186,13 +186,13 @@ services:
       - run
       - --no-sync
       - uvicorn
-      - src.monitoring.alert_receiver:app
+      - mlops_churn_prediction.monitoring.alert_receiver:app
       - --host
       - 0.0.0.0
       - --port
       - "8090"
     environment:
-      PYTHONPATH: /app
+      PYTHONPATH: /app/src:/app
       SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
       UV_NO_SYNC: "1"
       UV_CACHE_DIR: /tmp/.uv_cache

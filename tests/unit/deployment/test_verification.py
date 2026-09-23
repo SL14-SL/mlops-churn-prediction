@@ -5,7 +5,7 @@ from unittest.mock import (
 import pytest
 import requests
 
-from src.deployment import verification
+from mlops_churn_prediction.deployment import verification
 
 
 def response_with(

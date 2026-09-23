@@ -3,7 +3,7 @@ from flows.tasks.serving_tasks import (
     task_rollback_serving_release,
     task_verify_serving_release,
 )
-from src.utils.logger import get_logger
+from mlops_churn_prediction.utils.logger import get_logger
 
 
 logger = get_logger(__name__)

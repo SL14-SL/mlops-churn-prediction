@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from src.monitoring.performance import compute_classification_metrics
+from mlops_churn_prediction.monitoring.performance import compute_classification_metrics
 
 
 def test_compute_classification_metrics_for_churn():

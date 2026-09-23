@@ -1,7 +1,7 @@
 import hashlib
 import json
 
-from src.inference.releases.storage import (
+from mlops_churn_prediction.inference.releases.storage import (
     copy_uri,
     load_json,
     sha256_uri,

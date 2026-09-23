@@ -1,6 +1,6 @@
 import pandas as pd
 
-from src.inference.pipeline import (
+from mlops_churn_prediction.inference.pipeline import (
     validate_prediction_input,
     align_features_for_model,
 )

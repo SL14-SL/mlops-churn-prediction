@@ -155,29 +155,33 @@ jobs:
 
 
 # -------------------------------------------------
-# 4️⃣ TERRAFORM PLAN
+# 4️⃣ TERRAFORM VALIDATION
 # -------------------------------------------------
   terraform-plan:
+    name: Validate Terraform
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: infrastructure
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
 
-      - name: Terraform Init
-        run: terraform init
+      - name: Check Terraform formatting
+        run: terraform fmt -check -recursive
 
-      - name: Terraform Validate
+      - name: Initialize Terraform without backend
+        run: terraform init -backend=false -input=false
+
+      - name: Validate Terraform
         run: terraform validate
-
-      - name: Terraform Plan
-        run: terraform plan
 
 # -------------------------------------------------
 # 5️⃣ BUILD API (Build → Scan → Push)
@@ -292,7 +296,7 @@ jobs:
 
       - name: Deploy API via deployment CLI
         run: |
-          uv run --active python -m src.deployment.cli deploy prediction_api --tag ${{ github.sha }} \
+          uv run --active python -m mlops_churn_prediction.deployment.cli deploy prediction_api --tag ${{ github.sha }} \
             --service-account "${{ secrets.GCP_SA_EMAIL }}" \
             --env-from APP_ENV \
             --env-from API_KEY \

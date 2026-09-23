@@ -5,7 +5,8 @@ from pathlib import PurePosixPath
 
 import fsspec
 
-from src.configs.loader import ensure_dir, get_path
+from mlops_churn_prediction.configs.loader import get_path
+from mlops_churn_prediction.storage.filesystem import ensure_dir
 
 
 RAW_FILES_TO_KEEP = {

@@ -2,7 +2,7 @@ import pandera.pandas as pa
 import pandas as pd
 import pytest
 
-from src.data.validation.validate import validate_train
+from mlops_churn_prediction.data.validation.validate import validate_train
 
 
 @pytest.fixture

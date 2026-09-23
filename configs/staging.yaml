@@ -7,6 +7,13 @@ model:
 
 tracking:
   mlflow_tracking_uri: ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
+  experiment_name: churn-prediction-training-staging
+  model_name: churn-prediction-model-staging
+  promotion:
+    metric_name: roc_auc
+    direction: maximize
+    minimum_improvement: 0.0
+    allow_initial_champion: true
 
 services:
   prefect_api_url: ${PREFECT_API_URL:-http://prefect:4200/api}
@@ -29,6 +36,7 @@ paths:
   predictions: data/predictions
   monitoring: data/monitoring
   versioning: data/versioning
+  pipeline_runs: data/pipeline-runs
 
 costs:
   training:

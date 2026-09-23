@@ -1,6 +1,6 @@
 import pandas as pd
 
-from src.data.features.common import (
+from mlops_churn_prediction.data.features.common import (
     cast_object_columns_to_category,
     drop_columns_if_present,
 )

@@ -6,9 +6,9 @@ import sys
 import fsspec
 import mlflow
 
-from src.data.versioning import log_dataset_manifest_to_mlflow
-from src.training.model_comparison import compare_models
-from src.training.train import train
+from mlops_churn_prediction.data.versioning import log_dataset_manifest_to_mlflow
+from mlops_churn_prediction.training.model_comparison import compare_models
+from mlops_churn_prediction.training.train import train
 
 
 def main(manifest_path: str) -> None:

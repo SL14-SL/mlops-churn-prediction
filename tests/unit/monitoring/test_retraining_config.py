@@ -2,7 +2,7 @@ from unittest.mock import (
     MagicMock,
 )
 
-from src.monitoring import config
+from mlops_churn_prediction.monitoring import config
 
 
 def test_builds_classification_retraining_settings(

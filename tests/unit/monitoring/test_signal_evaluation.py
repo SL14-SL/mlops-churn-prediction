@@ -1,6 +1,6 @@
 import pandas as pd
 
-from src.monitoring.signal_evaluation import (
+from mlops_churn_prediction.monitoring.signal_evaluation import (
     evaluate_performance_degradation,
     evaluate_persistent_feature_drift,
 )

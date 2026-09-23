@@ -1,6 +1,6 @@
 import pytest
 
-from src.training.promotion_policy import (
+from mlops_churn_prediction.training.promotion_policy import (
     PromotionThresholds,
     evaluate_promotion_policy,
 )

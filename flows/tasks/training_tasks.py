@@ -1,6 +1,6 @@
 from prefect import task, get_run_logger
 
-from src.training.train import train
+from mlops_churn_prediction.training.train import train
 
 @task(name="Model Training")
 def task_train():

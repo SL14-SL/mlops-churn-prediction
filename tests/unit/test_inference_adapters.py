@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from src.inference.adapters import request_to_dataframe
+from mlops_churn_prediction.inference.adapters import request_to_dataframe
 
 
 def test_request_to_dataframe_success():

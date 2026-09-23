@@ -13,14 +13,14 @@ from prefect import (
 from flows.training_flow import (
     training_pipeline,
 )
-from src.monitoring.retraining_policy import RetrainingAction
+from mlops_churn_prediction.monitoring.retraining_policy import RetrainingAction
 
-from src.monitoring.retraining_state import (
+from mlops_churn_prediction.monitoring.retraining_state import (
     decision_was_processed,
     record_successful_retraining,
 )
-from src.monitoring.trigger import evaluate_retraining
-from src.monitoring.monitoring_refresh import refresh_monitoring_signals
+from mlops_churn_prediction.monitoring.trigger import evaluate_retraining
+from mlops_churn_prediction.monitoring.monitoring_refresh import refresh_monitoring_signals
 
 def parse_evaluated_at(
     value: str,

@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pandas as pd
 
-from src.training import evaluate_metrics
+from mlops_churn_prediction.training import evaluate_metrics
 
 
 def test_get_decision_threshold_from_run():

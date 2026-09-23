@@ -1,7 +1,7 @@
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 import pytest
 
-from src.training.model_factory import build_model
+from mlops_churn_prediction.training.model_factory import build_model
 
 
 def test_build_gradient_boosting_model():

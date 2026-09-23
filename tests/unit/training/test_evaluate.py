@@ -5,7 +5,7 @@ from unittest.mock import (
 import numpy as np
 import pandas as pd
 
-from src.training import evaluate
+from mlops_churn_prediction.training import evaluate
 
 
 def test_evaluate_model_returns_f1(

@@ -5,7 +5,7 @@ from unittest.mock import (
 import pandas as pd
 import pytest
 
-from src.data.raw import ingest
+from mlops_churn_prediction.data.raw import ingest
 
 
 def build_churn_frame(

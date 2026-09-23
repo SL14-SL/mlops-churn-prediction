@@ -4,7 +4,7 @@ from unittest.mock import (
 
 import pandas as pd
 
-from src.monitoring import (
+from mlops_churn_prediction.monitoring import (
     signal_collector,
 )
 
@@ -406,7 +406,7 @@ def test_active_release_is_training_fallback(
 
     monkeypatch.setattr(
         signal_collector,
-        "load_active_serving_manifest",
+        "load_active_release_manifest",
         MagicMock(
             return_value=(
                 manifest,

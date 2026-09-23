@@ -4,7 +4,7 @@ from mlflow.tracking import MlflowClient
 
 
 # --- INTERNAL CONFIG BOOTSTRAP ---
-from src.configs.loader import load_config
+from mlops_churn_prediction.configs.loader import load_config
 
 # Load config early so environment variables (Prefect, MLflow) are set
 ENV_CFG = load_config()
@@ -16,9 +16,9 @@ from prefect import task, get_run_logger
 # --- PROJECT IMPORTS ---
 # ruff: noqa: E402
 
-from src.training.register import register_model, champion_exists
-from src.training.evaluate import evaluate_model
-from src.training.model_comparison import compare_models
+from mlops_churn_prediction.training.register import register_model, champion_exists
+from mlops_churn_prediction.training.evaluate import evaluate_model
+from mlops_churn_prediction.training.model_comparison import compare_models
 
 # --- INITIALIZE CONFIGURATION ---
 GCP_CFG = load_config("gcp.yaml")

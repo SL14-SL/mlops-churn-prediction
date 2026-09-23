@@ -12,7 +12,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 # UV_PYTHON_INSTALL_DIR: Force uv to install Python inside /app instead of /home
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app \
+    PYTHONPATH=/app/src:/app \
     UV_PROJECT_ENVIRONMENT=/app/.venv \
     UV_LINK_MODE=copy \
     UV_CACHE_DIR=/tmp/.uv_cache \
@@ -64,4 +64,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 # --no-sync is CRITICAL: It tells uv NOT to re-verify or re-install the project 
 # at startup, which stops it from trying to write to the protected .venv 
 # with your host user permissions.
-CMD ["uv", "run", "--no-sync", "uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uv", "run", "--no-sync", "uvicorn", "mlops_churn_prediction.api.app:app", "--host", "0.0.0.0", "--port", "8080"]

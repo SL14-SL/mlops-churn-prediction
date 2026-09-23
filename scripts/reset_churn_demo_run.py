@@ -7,11 +7,9 @@ from pathlib import (
 
 import fsspec
 
-from src.configs.loader import (
-    ensure_dir,
-    get_path,
-)
-from src.data.raw.ingest import ingest
+from mlops_churn_prediction.configs.loader import get_path
+from mlops_churn_prediction.storage.filesystem import ensure_dir
+from mlops_churn_prediction.data.raw.ingest import ingest
 
 
 RAW_FILES_TO_KEEP = {

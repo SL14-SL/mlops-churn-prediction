@@ -3,8 +3,8 @@ from unittest.mock import MagicMock
 from datetime import datetime, timezone
 import pytest
 
-from src.monitoring import retraining_state
-from src.monitoring.retraining_policy import (
+from mlops_churn_prediction.monitoring import retraining_state
+from mlops_churn_prediction.monitoring.retraining_policy import (
     RetrainingAction,
     RetrainingDecision,
 )

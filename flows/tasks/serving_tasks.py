@@ -1,32 +1,57 @@
-import os
 import hashlib
 import json
+import os
+
 import requests
+from mlflow.tracking import MlflowClient
+from prefect import get_run_logger, task
 
-from mlflow.tracking import (
-    MlflowClient,
-)
-from prefect import (
-    get_run_logger,
-    task,
-)
-
-from src.configs.loader import (
+from mlops_churn_prediction.configs.loader import (
     get_path,
     load_config,
 )
-from src.deployment.verification import (
+from mlops_churn_prediction.configs.paths import (
+    join_uri,
+)
+from mlops_churn_prediction.deployment.prediction_probe import (
+    build_prediction_probe,
+)
+from mlops_churn_prediction.deployment.verification import (
     verify_prediction_probe,
     verify_serving_release,
 )
-from src.inference.releases.repository import (
-    load_active_release_id,
-    load_release_prediction_probe,
-    load_serving_release_manifest,
+from mlops_churn_prediction.inference.releases.artifact_publisher import (
+    ServingArtifactSource,
 )
-
-from src.deployment.prediction_probe import build_prediction_probe
-from src.inference.releases.publisher import publish_serving_release
+from mlops_churn_prediction.inference.releases.contracts import (
+    TaskType,
+)
+from mlops_churn_prediction.inference.releases.lifecycle_pointer import (
+    load_active_release_id,
+)
+from mlops_churn_prediction.inference.releases.lifecycle_publisher import (
+    publish_serving_release,
+)
+from mlops_churn_prediction.inference.releases.lifecycle_repository import (
+    load_release_manifest,
+)
+from mlops_churn_prediction.inference.releases.storage import (
+    load_json,
+    write_json,
+)
+from mlops_churn_prediction.tracking.aliases import (
+    AliasAssignment,
+    ModelAlias,
+)
+from mlops_churn_prediction.tracking.promotion import (
+    PromotionDecision,
+)
+from mlops_churn_prediction.tracking.promotion_service import (
+    PromotionOutcome,
+)
+from mlops_churn_prediction.tracking.registry import (
+    ModelRegistrationResult,
+)
 
 
 ENV_CFG = load_config()
@@ -172,13 +197,9 @@ def task_verify_serving_release(
         )
     )
 
-    manifest = (
-        load_serving_release_manifest(
-            models_path=models_path,
-            release_id=(
-                expected_release_id
-            ),
-        )
+    manifest, release_root = load_release_manifest(
+        models_path=models_path,
+        release_id=expected_release_id,
     )
 
     if (
@@ -186,7 +207,7 @@ def task_verify_serving_release(
             readiness_result.model_version
         )
         != str(
-            manifest.model_version
+            manifest.model.version
         )
     ):
         raise RuntimeError(
@@ -195,12 +216,12 @@ def task_verify_serving_release(
             "ready="
             f"{readiness_result.model_version} | "
             "manifest="
-            f"{manifest.model_version}"
+            f"{manifest.model.version}"
         )
 
     if (
         readiness_result.model_run_id
-        != manifest.model_run_id
+        != manifest.model.run_id
     ):
         raise RuntimeError(
             "Ready endpoint model run ID "
@@ -208,15 +229,25 @@ def task_verify_serving_release(
             "ready="
             f"{readiness_result.model_run_id} | "
             "manifest="
-            f"{manifest.model_run_id}"
+            f"{manifest.model.run_id}"
         )
 
-    prediction_probe_payload = (
-        load_release_prediction_probe(
-            models_path=models_path,
-            release_id=(
-                expected_release_id
-            ),
+    prediction_probe_reference = (
+        manifest.artifacts.get(
+            "prediction_probe"
+        )
+    )
+
+    if prediction_probe_reference is None:
+        raise RuntimeError(
+            "Serving release has no "
+            "prediction probe."
+        )
+
+    prediction_probe_payload = load_json(
+        join_uri(
+            release_root,
+            prediction_probe_reference.path,
         )
     )
 
@@ -237,10 +268,10 @@ def task_verify_serving_release(
                 manifest.release_id
             ),
             expected_model_version=(
-                manifest.model_version
+                manifest.model.version
             ),
             expected_model_run_id=(
-                manifest.model_run_id
+                manifest.model.run_id
             ),
         )
     )
@@ -315,26 +346,20 @@ def task_rollback_serving_release(
 
     api_result = response.json()
 
-    previous_manifest = (
-        load_serving_release_manifest(
-            models_path=get_path(
-                "models"
-            ),
-            release_id=(
-                previous_release_id
-            ),
-        )
+    previous_manifest, _ = load_release_manifest(
+        models_path=get_path("models"),
+        release_id=previous_release_id,
     )
 
     client = MlflowClient()
 
     client.set_registered_model_alias(
         name=(
-            previous_manifest.model_name
+            previous_manifest.model.name
         ),
         alias="champion",
         version=str(
-            previous_manifest.model_version
+            previous_manifest.model.version
         ),
     )
 
@@ -342,21 +367,19 @@ def task_rollback_serving_release(
         "Automatic rollback completed | "
         "release_id=%s model_version=%s",
         previous_release_id,
-        previous_manifest.model_version,
+        previous_manifest.model.version,
     )
 
     return {
-        "release_id": (
-            previous_release_id
-        ),
+        "release_id": previous_release_id,
         "model_name": (
-            previous_manifest.model_name
+            previous_manifest.model.name
         ),
         "model_version": str(
-            previous_manifest.model_version
+            previous_manifest.model.version
         ),
         "model_run_id": (
-            previous_manifest.model_run_id
+            previous_manifest.model.run_id
         ),
         "api_result": api_result,
     }
@@ -394,11 +417,8 @@ def task_publish_serving_release(
     *,
     registration_result: dict,
     dataset_manifest: dict,
-):
-    """
-    Publish and activate the complete churn serving release.
-    """
-    
+) -> dict:
+    """Publish a promoted model through the shared lifecycle publisher."""
     if not registration_result.get(
         "promoted",
         False,
@@ -407,54 +427,116 @@ def task_publish_serving_release(
             "Cannot publish a serving release "
             "for a non-promoted model."
         )
-    
+
     p_logger = get_run_logger()
-    
-    models_path = get_path(
-        "models"
-    )
+    models_path = get_path("models")
     validated_path = get_path(
         "validated_data"
     )
 
-    feature_schema_source = (
-        f"{models_path}/feature_schema.json"
+    model_version = str(
+        registration_result["model_version"]
     )
-    validated_data_path = (
-        f"{validated_path}/train.parquet"
+    model_run_id = str(
+        registration_result["model_run_id"]
+    )
+    model_type = str(
+        registration_result["model_type"]
+    )
+    decision_threshold = float(
+        registration_result[
+            "decision_threshold"
+        ]
     )
 
-    prediction_probe = (
-        build_prediction_probe(
-            validated_data_path=(
-                validated_data_path
-            ),
-        )
+    prediction_probe = build_prediction_probe(
+        validated_data_path=(
+            f"{validated_path}/train.parquet"
+        ),
     )
 
-    manifest = publish_serving_release(
-        models_path=models_path,
+    prediction_probe_uri = (
+        f"{models_path}/training-runs/"
+        f"{model_run_id}/"
+        "prediction_probe.json"
+    )
+    write_json(
+        prediction_probe_uri,
+        prediction_probe,
+    )
+
+    registration = ModelRegistrationResult(
+        registered=True,
+        run_id=model_run_id,
         model_name=MODEL_NAME,
-        model_version=(
-            registration_result[
-                "model_version"
-            ]
+        model_version=model_version,
+        model_uri=(
+            f"models:/{MODEL_NAME}/"
+            f"{model_version}"
         ),
-        model_run_id=(
-            registration_result[
-                "model_run_id"
-            ]
+    )
+
+    promotion = PromotionOutcome(
+        decision=PromotionDecision(
+            promote=True,
+            metric_name="legacy_flow_promotion",
+            candidate_value=1.0,
+            champion_value=None,
+            improvement=None,
+            reason=(
+                "Candidate was promoted by the "
+                "existing churn training flow."
+            ),
         ),
-        model_type=(
-            registration_result[
-                "model_type"
-            ]
+        previous_champion_version=(
+            registration_result.get(
+                "previous_champion_version"
+            )
         ),
-        decision_threshold=(
-            registration_result[
-                "decision_threshold"
-            ]
+        champion_assignment=AliasAssignment(
+            model_name=MODEL_NAME,
+            model_version=model_version,
+            alias=ModelAlias.CHAMPION,
         ),
+    )
+
+    published = publish_serving_release(
+        models_path=models_path,
+        registration=registration,
+        promotion=promotion,
+        task_type=TaskType.CLASSIFICATION,
+        model_type=model_type,
+        sources={
+            "feature_schema": (
+                ServingArtifactSource(
+                    source_uri=(
+                        f"{models_path}/"
+                        "feature_schema.json"
+                    ),
+                    relative_path=(
+                        "feature_schema.json"
+                    ),
+                )
+            ),
+            "prediction_probe": (
+                ServingArtifactSource(
+                    source_uri=(
+                        prediction_probe_uri
+                    ),
+                    relative_path=(
+                        "prediction_probe.json"
+                    ),
+                )
+            ),
+        },
+        metadata={
+            "decision_threshold": (
+                decision_threshold
+            ),
+            "publication_source": (
+                "legacy_churn_training_flow"
+            ),
+        },
         dataset_version=(
             dataset_manifest.get(
                 "dataset_version"
@@ -468,19 +550,15 @@ def task_publish_serving_release(
                 "git_commit"
             )
         ),
-        feature_schema_source=(
-            feature_schema_source
-        ),
-        prediction_probe_payload=(
-            prediction_probe
-        ),
     )
+
+    manifest = published.manifest
 
     p_logger.info(
         "Serving release published: "
         "release_id=%s model_version=%s",
         manifest.release_id,
-        manifest.model_version,
+        manifest.model.version,
     )
 
     return manifest.to_dict()

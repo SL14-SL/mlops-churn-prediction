@@ -9,7 +9,14 @@ import mlflow
 from google.cloud import storage
 
 # --- INTERNAL CONFIG BOOTSTRAP ---
-from src.configs.loader import load_config, get_path, file_exists, ensure_dir
+from mlops_churn_prediction.configs.loader import (
+    load_config,
+    get_path,
+)
+from mlops_churn_prediction.storage.filesystem import (
+    file_exists,
+    ensure_dir,
+)
 
 # Load config early so environment variables (Prefect, MLflow) are set
 ENV_CFG = load_config()
@@ -21,14 +28,14 @@ from prefect import task, get_run_logger
 # --- PROJECT IMPORTS ---
 # ruff: noqa: E402
 
-from src.utils.logger import get_logger
+from mlops_churn_prediction.utils.logger import get_logger
 
-from src.data.raw.ingest import ingest
-from src.data.features.pipeline import run_feature_pipeline
-from src.data.splits.split import split as split_logic
-from src.data.versioning import make_dataset_version, snapshot_current_datasets, log_dataset_manifest_to_mlflow
+from mlops_churn_prediction.data.raw.ingest import ingest
+from mlops_churn_prediction.data.features.pipeline import run_feature_pipeline
+from mlops_churn_prediction.data.splits.split import split as split_logic
+from mlops_churn_prediction.data.versioning import make_dataset_version, snapshot_current_datasets, log_dataset_manifest_to_mlflow
 
-from src.monitoring.feature_drift import run_feature_drift_check
+from mlops_churn_prediction.monitoring.feature_drift import run_feature_drift_check
 
 
 logger = get_logger(__name__)
