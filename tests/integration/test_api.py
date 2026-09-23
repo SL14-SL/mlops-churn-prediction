@@ -295,17 +295,31 @@ def test_predict_endpoint_requires_api_key(
 def test_metrics_endpoint_exposes_custom_metrics(
     api_client,
 ):
+    tracked_response = api_client.get(
+        "/does-not-exist"
+    )
+
+    assert tracked_response.status_code == 404
+
     response = api_client.get(
         "/metrics"
     )
 
     assert response.status_code == 200
     assert (
-        "api_request_count_total"
+        "mlops_api_requests_total"
         in response.text
     )
     assert (
-        "api_request_latency_seconds"
+        "mlops_api_request_latency_seconds"
+        in response.text
+    )
+    assert (
+        'path="/unmatched"'
+        in response.text
+    )
+    assert (
+        'status_code="404"'
         in response.text
     )
 
