@@ -8,10 +8,10 @@ from mlops_churn_prediction.inference.releases.artifact_publisher import (
 from mlops_churn_prediction.inference.releases.contracts import (
     TaskType,
 )
-from mlops_churn_prediction.inference.releases.lifecycle_publisher import (
+from mlops_churn_prediction.inference.releases.publisher import (
     publish_serving_release,
 )
-from mlops_churn_prediction.inference.releases.lifecycle_repository import (
+from mlops_churn_prediction.inference.releases.repository import (
     load_active_release_manifest,
 )
 from mlops_churn_prediction.tracking.aliases import (

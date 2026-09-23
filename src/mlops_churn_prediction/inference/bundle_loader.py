@@ -9,7 +9,7 @@ from .releases.contracts import (
     ArtifactReference,
     TaskType,
 )
-from .releases.lifecycle_repository import (
+from .releases.repository import (
     load_release_manifest,
 )
 from .releases.storage import (

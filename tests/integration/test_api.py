@@ -9,7 +9,7 @@ from mlops_churn_prediction.inference.releases.contracts import (
     ServingReleaseManifest,
     TaskType,
 )
-from mlops_churn_prediction.inference.releases.lifecycle_pointer import (
+from mlops_churn_prediction.inference.releases.pointer import (
     ReleaseOperation,
 )
 from mlops_churn_prediction.inference.serving_bundle import (

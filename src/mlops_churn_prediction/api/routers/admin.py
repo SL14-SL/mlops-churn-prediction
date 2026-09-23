@@ -23,7 +23,7 @@ from mlops_churn_prediction.api.serving_state import (
 from mlops_churn_prediction.inference.model_manager import (
     load_serving_bundle_for_release,
 )
-from mlops_churn_prediction.inference.releases.lifecycle_pointer import (
+from mlops_churn_prediction.inference.releases.pointer import (
     ReleaseOperation,
     activate_release_pointer,
     load_active_release_id,

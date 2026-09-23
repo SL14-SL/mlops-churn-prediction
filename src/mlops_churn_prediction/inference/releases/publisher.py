@@ -26,13 +26,13 @@ from .contracts import (
     ServingReleaseManifest,
     TaskType,
 )
-from .lifecycle_manifest import write_serving_manifest
-from .lifecycle_pointer import (
+from .manifest import write_serving_manifest
+from .pointer import (
     ActiveReleasePointer,
     ReleaseOperation,
     load_active_release_pointer,
 )
-from .lifecycle_repository import (
+from .repository import (
     activate_release,
     load_release_manifest,
 )

@@ -15,10 +15,10 @@ from mlops_churn_prediction.deployment.verification import (
     verify_serving_release,
 )
 from mlops_churn_prediction.configs.paths import join_uri
-from mlops_churn_prediction.inference.releases.lifecycle_pointer import (
+from mlops_churn_prediction.inference.releases.pointer import (
     load_active_release_id,
 )
-from mlops_churn_prediction.inference.releases.lifecycle_repository import (
+from mlops_churn_prediction.inference.releases.repository import (
     load_release_manifest,
 )
 from mlops_churn_prediction.inference.releases.storage import (

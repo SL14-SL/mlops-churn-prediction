@@ -2,7 +2,7 @@ import os
 import socket
 
 from .bundle_loader import load_serving_bundle
-from .releases.lifecycle_repository import (
+from .releases.repository import (
     load_active_release_manifest,
 )
 from .serving_bundle import ServingBundle

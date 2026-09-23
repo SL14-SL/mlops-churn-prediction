@@ -7,7 +7,7 @@ from prefect import flow
 from ..inference.releases.input_provider import (
     build_serving_release_input,
 )
-from ..inference.releases.lifecycle_publisher import (
+from ..inference.releases.publisher import (
     PublishedServingRelease,
     publish_serving_release,
 )

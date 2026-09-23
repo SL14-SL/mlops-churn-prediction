@@ -9,13 +9,13 @@ from mlops_churn_prediction.inference.releases.contracts import (
     ServingReleaseManifest,
     TaskType,
 )
-from mlops_churn_prediction.inference.releases.lifecycle_manifest import (
+from mlops_churn_prediction.inference.releases.manifest import (
     write_serving_manifest,
 )
-from mlops_churn_prediction.inference.releases.lifecycle_pointer import (
+from mlops_churn_prediction.inference.releases.pointer import (
     ReleaseOperation,
 )
-from mlops_churn_prediction.inference.releases.lifecycle_repository import (
+from mlops_churn_prediction.inference.releases.repository import (
     activate_release,
     list_release_manifests,
     load_active_release_manifest,

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from mlops_churn_prediction.inference.releases.lifecycle_pointer import (
+from mlops_churn_prediction.inference.releases.pointer import (
     ActiveReleasePointer,
     ReleaseOperation,
     activate_release_pointer,

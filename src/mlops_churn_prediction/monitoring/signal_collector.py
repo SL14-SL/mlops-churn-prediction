@@ -13,7 +13,7 @@ from mlops_churn_prediction.configs.loader import get_path
 from mlops_churn_prediction.storage.filesystem import file_exists
 from mlops_churn_prediction.configs.paths import join_uri
 
-from mlops_churn_prediction.inference.releases.lifecycle_repository import (
+from mlops_churn_prediction.inference.releases.repository import (
     load_active_release_manifest,
 )
 from mlops_churn_prediction.data.validation.validate import (
