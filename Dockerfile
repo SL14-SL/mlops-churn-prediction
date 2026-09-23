@@ -1,5 +1,5 @@
 # Use a specific slim Python image for a small footprint
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 # 1. Install uv (Modern Python package manager)
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
