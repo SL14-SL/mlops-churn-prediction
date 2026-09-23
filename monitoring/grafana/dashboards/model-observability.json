@@ -8,6 +8,7 @@
   "id": null,
   "links": [],
   "panels": [
+
     {
       "datasource": {
         "type": "prometheus",
@@ -18,34 +19,33 @@
           "color": {
             "mode": "thresholds"
           },
-          "decimals": 3,
-          "mappings": [],
-          "max": 100,
+          "decimals": 1,
+          "max": 1,
           "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
+                "color": "green",
                 "value": null
               },
               {
                 "color": "yellow",
-                "value": 99
+                "value": 0.7
               },
               {
-                "color": "green",
-                "value": 99.5
+                "color": "red",
+                "value": 0.9
               }
             ]
           },
-          "unit": "percent"
+          "unit": "percentunit"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 8,
-        "w": 8,
+        "w": 6,
         "x": 0,
         "y": 0
       },
@@ -53,29 +53,24 @@
       "options": {
         "colorMode": "background",
         "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
           "fields": "",
           "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
+        }
       },
       "targets": [
         {
           "editorMode": "code",
-          "expr": "100 * mlops_api:availability_ratio5m",
-          "legendFormat": "Availability",
+          "expr": "mlops_classification:positive_ratio5m",
+          "legendFormat": "Positive rate",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Availability SLI",
+      "title": "Positive Prediction Rate",
       "type": "stat"
     },
     {
@@ -89,8 +84,7 @@
             "mode": "thresholds"
           },
           "decimals": 1,
-          "mappings": [],
-          "max": 100,
+          "max": 1,
           "min": 0,
           "thresholds": {
             "mode": "absolute",
@@ -101,51 +95,46 @@
               },
               {
                 "color": "yellow",
-                "value": 25
+                "value": 0.7
               },
               {
                 "color": "green",
-                "value": 50
+                "value": 0.85
               }
             ]
           },
-          "unit": "percent"
+          "unit": "percentunit"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 8,
-        "w": 8,
-        "x": 8,
+        "w": 6,
+        "x": 6,
         "y": 0
       },
       "id": 2,
       "options": {
         "colorMode": "background",
         "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
           "fields": "",
           "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
+        }
       },
       "targets": [
         {
           "editorMode": "code",
-          "expr": "100 * mlops_api:error_budget_remaining_ratio5m",
-          "legendFormat": "Remaining",
+          "expr": "mlops_classification:accuracy5m",
+          "legendFormat": "Accuracy",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Error Budget Remaining",
+      "title": "Classification Accuracy",
       "type": "stat"
     },
     {
@@ -159,7 +148,7 @@
             "mode": "thresholds"
           },
           "decimals": 3,
-          "mappings": [],
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -169,53 +158,113 @@
               },
               {
                 "color": "yellow",
-                "value": 0.75
+                "value": 0.15
               },
               {
                 "color": "red",
-                "value": 1
+                "value": 0.25
               }
             ]
           },
-          "unit": "s"
+          "unit": "none"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 8,
-        "w": 8,
-        "x": 16,
+        "w": 6,
+        "x": 12,
         "y": 0
       },
       "id": 3,
       "options": {
         "colorMode": "background",
         "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
           "fields": "",
           "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
+        }
       },
       "targets": [
         {
           "editorMode": "code",
-          "expr": "mlops_api:p95_latency_seconds5m",
-          "legendFormat": "p95",
+          "expr": "mlops_classification:brier_score5m",
+          "legendFormat": "Brier score",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "p95 Latency",
+      "title": "Brier Score",
       "type": "stat"
     },
+
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 3
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "mlops_drift:detected_features",
+          "legendFormat": "Drifted features",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Features with Drift",
+      "type": "stat"
+    },
+
     {
       "datasource": {
         "type": "prometheus",
@@ -226,56 +275,17 @@
           "color": {
             "mode": "palette-classic"
           },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 4,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "percent"
+          "unit": "reqps"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 10,
-        "w": 24,
+        "w": 12,
         "x": 0,
         "y": 8
       },
-      "id": 4,
+      "id": 5,
       "options": {
         "legend": {
           "calcs": [
@@ -286,7 +296,6 @@
           "showLegend": true
         },
         "tooltip": {
-          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
@@ -294,20 +303,94 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "100 * mlops_api:availability_ratio5m",
-          "legendFormat": "Availability",
+          "expr": "sum by (predicted_class) (rate(mlops_classification_predictions_total[5m]))",
+          "legendFormat": "__auto",
           "range": true,
           "refId": "A"
-        },
-        {
-          "editorMode": "code",
-          "expr": "100 * mlops_api:latency_sli_ratio5m",
-          "legendFormat": "Requests within 1 second",
-          "range": true,
-          "refId": "B"
         }
       ],
-      "title": "Service-Level Indicators",
+      "title": "Predicted Classes",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 6,
+      "options": {},
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum by (le) (rate(mlops_classification_probability_bucket[5m]))",
+          "format": "heatmap",
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Probability Distribution",
+      "type": "heatmap"
+    },
+
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      },
+      "id": 7,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "mlops_feature_drift_score",
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Feature Drift Scores",
       "type": "timeseries"
     }
   ],
@@ -315,7 +398,8 @@
   "schemaVersion": 41,
   "tags": [
     "mlops",
-    "slo"
+    "model-observability",
+    "classification"
   ],
   "templating": {
     "list": []
@@ -326,8 +410,8 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "MLOps SLO Overview",
-  "uid": "mlops-slo-overview",
+  "title": "MLOps Model Observability",
+  "uid": "mlops-model-observability",
   "version": 1,
   "weekStart": ""
 }

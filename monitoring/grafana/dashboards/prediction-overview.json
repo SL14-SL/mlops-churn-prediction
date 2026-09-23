@@ -20,32 +20,22 @@
           },
           "decimals": 3,
           "mappings": [],
-          "max": 100,
-          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 99
-              },
-              {
                 "color": "green",
-                "value": 99.5
+                "value": null
               }
             ]
           },
-          "unit": "percent"
+          "unit": "reqps"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 8,
-        "w": 8,
+        "w": 6,
         "x": 0,
         "y": 0
       },
@@ -69,13 +59,13 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "100 * mlops_api:availability_ratio5m",
-          "legendFormat": "Availability",
+          "expr": "mlops_prediction:request_rate5m",
+          "legendFormat": "Predictions",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Availability SLI",
+      "title": "Prediction Request Rate",
       "type": "stat"
     },
     {
@@ -88,35 +78,25 @@
           "color": {
             "mode": "thresholds"
           },
-          "decimals": 1,
+          "decimals": 3,
           "mappings": [],
-          "max": 100,
-          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 25
-              },
-              {
                 "color": "green",
-                "value": 50
+                "value": null
               }
             ]
           },
-          "unit": "percent"
+          "unit": "ops"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 8,
-        "w": 8,
-        "x": 8,
+        "w": 6,
+        "x": 6,
         "y": 0
       },
       "id": 2,
@@ -139,13 +119,83 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "100 * mlops_api:error_budget_remaining_ratio5m",
-          "legendFormat": "Remaining",
+          "expr": "mlops_prediction:observation_rate5m",
+          "legendFormat": "Observations",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Error Budget Remaining",
+      "title": "Observation Throughput",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 2,
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "100 * mlops_prediction:error_ratio5m",
+          "legendFormat": "Errors",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Prediction Error Rate",
       "type": "stat"
     },
     {
@@ -183,11 +233,11 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 8,
-        "x": 16,
+        "w": 6,
+        "x": 18,
         "y": 0
       },
-      "id": 3,
+      "id": 4,
       "options": {
         "colorMode": "background",
         "graphMode": "area",
@@ -207,13 +257,13 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "mlops_api:p95_latency_seconds5m",
+          "expr": "mlops_prediction:p95_latency_seconds5m",
           "legendFormat": "p95",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "p95 Latency",
+      "title": "p95 Prediction Latency",
       "type": "stat"
     },
     {
@@ -227,55 +277,29 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
             "drawStyle": "line",
             "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
             "lineInterpolation": "linear",
             "lineWidth": 2,
             "pointSize": 4,
-            "scaleDistribution": {
-              "type": "linear"
-            },
             "showPoints": "never",
             "spanNulls": false,
             "stacking": {
               "group": "A",
               "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
             }
           },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "percent"
+          "unit": "reqps"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 10,
-        "w": 24,
+        "w": 12,
         "x": 0,
         "y": 8
       },
-      "id": 4,
+      "id": 5,
       "options": {
         "legend": {
           "calcs": [
@@ -286,7 +310,6 @@
           "showLegend": true
         },
         "tooltip": {
-          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
@@ -294,20 +317,80 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "100 * mlops_api:availability_ratio5m",
-          "legendFormat": "Availability",
+          "expr": "sum by (status) (rate(mlops_prediction_requests_total[5m]))",
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Prediction Requests by Status",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 4,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(mlops_prediction_latency_seconds_bucket[5m])))",
+          "legendFormat": "p50",
           "range": true,
           "refId": "A"
         },
         {
           "editorMode": "code",
-          "expr": "100 * mlops_api:latency_sli_ratio5m",
-          "legendFormat": "Requests within 1 second",
+          "expr": "mlops_prediction:p95_latency_seconds5m",
+          "legendFormat": "p95",
           "range": true,
           "refId": "B"
         }
       ],
-      "title": "Service-Level Indicators",
+      "title": "Prediction Latency Percentiles",
       "type": "timeseries"
     }
   ],
@@ -315,7 +398,7 @@
   "schemaVersion": 41,
   "tags": [
     "mlops",
-    "slo"
+    "prediction"
   ],
   "templating": {
     "list": []
@@ -326,8 +409,8 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "MLOps SLO Overview",
-  "uid": "mlops-slo-overview",
+  "title": "MLOps Prediction Overview",
+  "uid": "mlops-prediction-overview",
   "version": 1,
   "weekStart": ""
 }
