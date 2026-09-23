@@ -499,3 +499,20 @@ reset-demo: ## Reset generated demo state while retaining raw input data
 	rm -f ./mlflow.db
 	docker run --rm -v "$$(pwd):/workspace" alpine sh -c "rm -rf /workspace/prefect_data"
 	@echo "✅ Demo state reset complete. Raw source data remains in data/raw/."
+
+.PHONY: terraform-fmt
+terraform-fmt: ## Check Terraform formatting
+	terraform -chdir=infrastructure/terraform-bootstrap fmt -check -recursive
+	terraform -chdir=infrastructure/terraform fmt -check -recursive
+
+
+.PHONY: terraform-init
+terraform-init: ## Initialize Terraform without a remote backend
+	terraform -chdir=infrastructure/terraform-bootstrap init -backend=false
+	terraform -chdir=infrastructure/terraform init -backend=false
+
+
+.PHONY: terraform-validate
+terraform-validate: terraform-init terraform-fmt ## Validate Terraform modules
+	terraform -chdir=infrastructure/terraform-bootstrap validate
+	terraform -chdir=infrastructure/terraform validate

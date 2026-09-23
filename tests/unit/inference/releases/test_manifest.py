@@ -9,7 +9,7 @@ from mlops_churn_prediction.inference.releases.contracts import (
     ServingReleaseManifest,
     TaskType,
 )
-from mlops_churn_prediction.inference.releases.lifecycle_manifest import (
+from mlops_churn_prediction.inference.releases.manifest import (
     manifest_to_json,
     parse_artifact_reference,
     parse_serving_manifest,

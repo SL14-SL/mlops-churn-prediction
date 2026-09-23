@@ -6,8 +6,8 @@ from .contracts import (
     ServingReleaseManifest,
     TaskType,
 )
-from .lifecycle_manifest import read_serving_manifest
-from .lifecycle_pointer import (
+from .manifest import read_serving_manifest
+from .pointer import (
     ActiveReleasePointer,
     ReleaseOperation,
     activate_release_pointer,

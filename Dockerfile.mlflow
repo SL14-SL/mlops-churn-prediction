@@ -29,6 +29,19 @@ RUN python -m pip uninstall -y pip setuptools \
         /usr/local/lib/python3.12/site-packages/setuptools \
         /usr/local/lib/python3.12/site-packages/setuptools-*.dist-info
 
+RUN groupadd \
+        --system \
+        mlflow \
+    && useradd \
+        --system \
+        --gid mlflow \
+        --no-create-home \
+        --shell /usr/sbin/nologin \
+        mlflow \
+    && mkdir -p /app/mlruns \
+    && chown -R mlflow:mlflow /app
+
+USER mlflow
 EXPOSE 5000
 
 CMD ["sh", "-c", "if [ -n \"$CLOUD_SQL_CONNECTION_NAME\" ]; then \

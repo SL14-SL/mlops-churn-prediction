@@ -47,8 +47,11 @@ COPY --chown=mluser:mlgroup pyproject.toml uv.lock ./
 
 # IMPORTANT: --no-install-project prevents uv from trying to build your 
 # local code as a package during the build phase, avoiding 'egg-info' issues.
-RUN uv sync --frozen --no-cache --no-install-project
-
+RUN uv sync --frozen --no-cache --no-install-project \
+    && uv pip uninstall \
+        --python /app/.venv/bin/python \
+        pip
+        
 # 7. Copy application code
 # These will be shadowed by your volumes in docker-compose during development
 COPY --chown=mluser:mlgroup src/ /app/src/

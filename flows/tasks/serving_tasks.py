@@ -26,13 +26,13 @@ from mlops_churn_prediction.inference.releases.artifact_publisher import (
 from mlops_churn_prediction.inference.releases.contracts import (
     TaskType,
 )
-from mlops_churn_prediction.inference.releases.lifecycle_pointer import (
+from mlops_churn_prediction.inference.releases.pointer import (
     load_active_release_id,
 )
-from mlops_churn_prediction.inference.releases.lifecycle_publisher import (
+from mlops_churn_prediction.inference.releases.publisher import (
     publish_serving_release,
 )
-from mlops_churn_prediction.inference.releases.lifecycle_repository import (
+from mlops_churn_prediction.inference.releases.repository import (
     load_release_manifest,
 )
 from mlops_churn_prediction.inference.releases.storage import (

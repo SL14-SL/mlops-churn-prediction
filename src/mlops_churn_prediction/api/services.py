@@ -10,13 +10,19 @@ from mlops_churn_prediction.inference.pipeline import (
 )
 from mlops_churn_prediction.data.features.build_features import build_features
 from mlops_churn_prediction.monitoring.data_quality import log_data_quality_runtime
+from mlops_churn_prediction.monitoring.model_observability import (
+    observe_model_outputs,
+)
+from mlops_churn_prediction.monitoring.prediction import (
+    observe_prediction,
+)
 
 
 def ms_since(start: float) -> float:
     return round((time.perf_counter() - start) * 1000, 2)
 
 
-def run_prediction_pipeline(
+def _run_prediction_pipeline(
     *,
     payload,
     model,
@@ -92,6 +98,72 @@ def run_prediction_pipeline(
         "request_id": request_id,
         "environment": environment,
     }
+
+
+def run_prediction_pipeline(
+    *,
+    payload,
+    model,
+    model_type: str,
+    feature_schema: dict | None,
+    train_cfg: dict,
+    dq_reference_categories: dict,
+    decision_threshold: float = 0.5,
+):
+    """Execute and observe one complete prediction pipeline."""
+    started_at = time.perf_counter()
+    observation_count = len(
+        payload.inputs
+    )
+
+    try:
+        output = _run_prediction_pipeline(
+            payload=payload,
+            model=model,
+            model_type=model_type,
+            feature_schema=feature_schema,
+            train_cfg=train_cfg,
+            dq_reference_categories=(
+                dq_reference_categories
+            ),
+            decision_threshold=(
+                decision_threshold
+            ),
+        )
+    except Exception:
+        observe_prediction(
+            task_type="classification",
+            status="error",
+            observation_count=(
+                observation_count
+            ),
+            latency_seconds=(
+                time.perf_counter()
+                - started_at
+            ),
+        )
+        raise
+
+    observe_prediction(
+        task_type="classification",
+        status="success",
+        observation_count=(
+            observation_count
+        ),
+        latency_seconds=(
+            time.perf_counter()
+            - started_at
+        ),
+    )
+
+    observe_model_outputs(
+        output["results"],
+        decision_threshold=(
+            decision_threshold
+        ),
+    )
+
+    return output
 
 
 def attach_customer_ids(inputs: list[dict], results: list[dict]) -> list[dict]:
