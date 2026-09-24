@@ -31,7 +31,7 @@ IGNORED_PATHS = {
 }
 
 SERVING_READY = Gauge(
-    "api_serving_ready",
+    "mlops_serving_ready",
     (
         "Whether a complete serving bundle "
         "is currently active."
