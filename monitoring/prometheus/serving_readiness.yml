@@ -1,14 +1,16 @@
 groups:
-  - name: churn-serving
+  - name: mlops-serving
     rules:
-      - alert: ChurnServingBundleNotReady
+      - alert: MlopsServingBundleNotReady
         expr: >-
           (
-            api_serving_ready == 0
+            up{job="mlops-api"} == 1
           )
-          or
-          absent(
-            api_serving_ready
+          and on()
+          (
+            mlops_serving_ready == 0
+            or
+            absent(mlops_serving_ready)
           )
         for: 2m
         labels:

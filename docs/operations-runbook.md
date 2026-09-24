@@ -89,6 +89,7 @@ gcloud run services describe churn-prediction-api \
   --project "$GCP_PROJECT_ID" \
   --region "$GCP_REGION" \
   --format='yaml(metadata.name,status.url,status.traffic,status.conditions)'
+```
 
 The MLflow service is operated independently from this repository. Verify its
 configured endpoint:
@@ -553,7 +554,55 @@ uses `LOCAL_PREFECT_API_URL` only for local targets and explicitly forwards
 Do not repeat a successful bootstrap. Use the normal production training target
 after a Champion exists.
 
-## 11. Incident Closure
+## 11. Lifecycle Notification Incident
+
+### Symptoms
+
+- training, registration or promotion completes without the expected message;
+- lifecycle events appear in logs but not at the configured webhook;
+- logs contain `Lifecycle notification delivery failed`.
+
+### Investigation
+
+Confirm that notifications and the webhook are enabled in the active
+environment configuration:
+
+```yaml
+notifications:
+  enabled: true
+  webhook:
+    enabled: true
+```
+
+Verify that `LIFECYCLE_WEBHOOK_URL` is available in the runtime environment.
+Do not print the complete value because webhook URLs may contain secret tokens.
+
+Search application or orchestration logs for notification failures:
+
+```text
+Lifecycle notification delivery failed
+```
+
+Verify that the webhook endpoint:
+
+1. accepts HTTPS POST requests;
+2. accepts JSON request bodies;
+3. is reachable from the training runtime;
+4. responds before the configured timeout;
+5. has not expired or been revoked.
+
+### Recovery
+
+- restore network access to the webhook endpoint;
+- replace an expired or revoked webhook secret;
+- keep `fail_on_error: false` when notification outages must not block model
+  training and promotion;
+- rerun the lifecycle only when the underlying model operation itself failed.
+
+Notification retries are not performed automatically. The lifecycle event
+remains available in the structured application logs.
+
+## 12. Incident Closure
 
 Close an incident only when:
 

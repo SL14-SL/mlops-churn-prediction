@@ -1,4 +1,10 @@
 environment: staging
+
+project:
+  name: "Customer Churn Prediction"
+  slug: "mlops-churn-prediction"
+  task_type: "classification"
+
 project_name: churn-prediction-mlops
 random_seed: 42
 
@@ -15,6 +21,15 @@ tracking:
     minimum_improvement: 0.0
     allow_initial_champion: true
 
+notifications:
+  enabled: true
+  log_events: true
+  fail_on_error: false
+  webhook:
+    enabled: false
+    url: "${LIFECYCLE_WEBHOOK_URL:-}"
+    timeout_seconds: 5.0
+    
 services:
   prefect_api_url: ${PREFECT_API_URL:-http://prefect:4200/api}
   mlflow_ui_url: ${MLFLOW_UI_URL:-http://mlflow:5000}

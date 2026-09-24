@@ -17,6 +17,13 @@ def test_promoted_candidate_publishes_release(
         spec=TrainingPipeline
     )
     pipeline.config = {
+        "project": {
+            "slug": "lifecycle-release-test",
+        },
+        "environment": "test",
+        "notifications": {
+            "enabled": False,
+        },
         "paths": {
             "models": "artifacts/models",
         },
@@ -61,11 +68,30 @@ def test_promoted_candidate_publishes_release(
 
     promotion = MagicMock()
     promotion.decision.promote = True
+    promotion.decision.metric_name = "rmse"
+    promotion.decision.candidate_value = 0.81
+    promotion.decision.champion_value = 0.85
+    promotion.decision.improvement = 0.04
+    promotion.decision.reason = (
+        "Candidate satisfies policy."
+    )
+    promotion.previous_champion_version = "6"
+
+    registration = MagicMock()
+    registration.registered = True
+    registration.run_id = "mlflow-run-7"
+    registration.model_name = (
+        "release-test-model"
+    )
+    registration.model_version = "7"
+    registration.model_uri = (
+        "models:/release-test-model/7"
+    )
 
     candidate_result = MagicMock()
     candidate_result.promotion = promotion
     candidate_result.registration = (
-        MagicMock()
+        registration
     )
 
     finalize_candidate = MagicMock(
@@ -92,6 +118,12 @@ def test_promoted_candidate_publishes_release(
     )
 
     published_release = MagicMock()
+    published_release.manifest.release_id = (
+        "release-7"
+    )
+    published_release.release_root = (
+        "artifacts/models/releases/release-7"
+    )
     publish_release = MagicMock(
         return_value=published_release
     )

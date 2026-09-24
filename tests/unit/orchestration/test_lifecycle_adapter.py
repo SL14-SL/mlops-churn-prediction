@@ -2,6 +2,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from mlops_churn_prediction.notifications.contracts import (
+    LifecycleEventType,
+)
 from mlops_churn_prediction.orchestration.lifecycle_adapter import (
     PrefectTrainingLifecycleResult,
     run_prefect_model_lifecycle,
@@ -16,17 +19,41 @@ def build_pipeline() -> MagicMock:
         spec=TrainingPipeline
     )
     pipeline.config = {
+        "project": {
+            "slug": "lifecycle-test",
+        },
+        "environment": "test",
+        "notifications": {
+            "enabled": False,
+        },
         "tracking": {
             "mlflow_tracking_uri": (
                 "http://localhost:5000"
             ),
             "experiment_name": "lifecycle-test",
             "model_name": "lifecycle-test-model",
-        }
+        },
     }
     pipeline.model_logger = MagicMock()
 
     return pipeline
+
+
+def rejected_candidate_result() -> MagicMock:
+    registration = MagicMock()
+    registration.registered = False
+    registration.run_id = "run-rejected"
+    registration.model_name = (
+        "lifecycle-test-model"
+    )
+    registration.reason = (
+        "Candidate did not pass the quality gate."
+    )
+
+    candidate = MagicMock()
+    candidate.registration = registration
+    candidate.promotion = None
+    return candidate
 
 
 @patch(
@@ -87,8 +114,9 @@ def test_runs_complete_model_lifecycle(
         tracked_result
     )
 
-    candidate_result = MagicMock()
-    candidate_result.promotion = None
+    candidate_result = (
+        rejected_candidate_result()
+    )
     model_artifact = MagicMock()
 
     log_model_artifact.return_value = (
@@ -207,8 +235,9 @@ def test_preserves_explicit_pipeline_run_id(
     )
 
     model_artifact = MagicMock()
-    candidate_result = MagicMock()
-    candidate_result.promotion = None
+    candidate_result = (
+        rejected_candidate_result()
+    )
 
     log_model_artifact.return_value = (
         model_artifact
@@ -216,11 +245,13 @@ def test_preserves_explicit_pipeline_run_id(
     finalize_candidate.return_value = (
         candidate_result
     )
+    notification_sink = MagicMock()
 
     result = run_prefect_model_lifecycle.fn(
         pipeline=pipeline,
         pipeline_run_id="pipeline-run-123",
         artifact_path="trained/model",
+        notification_sink=notification_sink,
     )
 
     assert result.pipeline is tracked_result
@@ -255,6 +286,18 @@ def test_preserves_explicit_pipeline_run_id(
         logged_model_uri=(
             model_artifact.model_uri
         ),
+    )
+    notification_sink.notify.assert_called_once()
+
+    event = (
+        notification_sink
+        .notify
+        .call_args
+        .args[0]
+    )
+
+    assert event.event_type == (
+        LifecycleEventType.CANDIDATE_REJECTED
     )
 
 
@@ -304,6 +347,7 @@ def test_failed_pipeline_stops_model_lifecycle(
     run_prefect_training_pipeline.side_effect = (
         RuntimeError("training failed")
     )
+    notification_sink = MagicMock()
 
     with pytest.raises(
         RuntimeError,
@@ -311,8 +355,25 @@ def test_failed_pipeline_stops_model_lifecycle(
     ):
         run_prefect_model_lifecycle.fn(
             pipeline=pipeline,
+            notification_sink=notification_sink,
         )
 
+    notification_sink.notify.assert_called_once()
+
+    event = (
+        notification_sink
+        .notify
+        .call_args
+        .args[0]
+    )
+
+    assert event.event_type == (
+        LifecycleEventType.PIPELINE_FAILED
+    )
+    assert event.run_id == "mlflow-run-3"
+    assert event.details["error_message"] == (
+        "training failed"
+    )
     log_training_result.assert_not_called()
     log_evaluation_result.assert_not_called()
     log_model_artifact.assert_not_called()

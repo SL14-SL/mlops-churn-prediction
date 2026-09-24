@@ -222,6 +222,48 @@ Retraining and promotion are intentionally separate decisions: monitoring may tr
   <img src="docs/images/prefect_flow.png" width="100%" alt="Prefect training flow">
 </p>
 
+
+### Model lifecycle notifications
+
+Training lifecycle events are written to the application logs and can
+optionally be delivered to an HTTP webhook.
+
+The following events are available:
+
+- pipeline failure
+- candidate rejection by the quality gate
+- Challenger registration without promotion
+- successful Champion promotion
+- successful serving-release publication
+
+Webhook delivery is disabled by default. To enable it, update the appropriate
+environment configuration:
+
+```yaml
+notifications:
+  enabled: true
+  log_events: true
+  fail_on_error: false
+  webhook:
+    enabled: true
+    url: "${LIFECYCLE_WEBHOOK_URL:-}"
+    timeout_seconds: 5.0
+```
+
+Provide the URL only through the runtime environment:
+
+```dotenv
+LIFECYCLE_WEBHOOK_URL=https://example.com/your-secret-webhook
+```
+
+Do not commit webhook URLs because they commonly contain credentials or secret
+tokens.
+
+With `fail_on_error: false`, a temporary notification outage is logged but
+does not invalidate an otherwise successful training or promotion lifecycle.
+Set it to `true` only when notification delivery is a mandatory operational
+requirement.
+
 ---
 
 ## 📊 Experiment Tracking and Lineage
@@ -788,6 +830,7 @@ Detailed architecture and operational documentation is available in:
 - [Automatic retraining policy](docs/retraining-policy.md)
 - [Monitoring, SLOs and alerting](docs/monitoring-and-slos.md)
 - [Incident response runbook](docs/operations-runbook.md)
+- [Applying template updates](docs/template-updates.md)
 
 ---
 

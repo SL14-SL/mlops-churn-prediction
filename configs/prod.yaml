@@ -1,9 +1,24 @@
 environment: prod
+
+project:
+  name: "Customer Churn Prediction"
+  slug: "mlops-churn-prediction"
+  task_type: "classification"
+
 project_name: churn-prediction-mlops
 random_seed: 42
 
 model:
   registry_name: ${MODEL_REGISTRY_NAME:-churn-prediction-model}
+
+notifications:
+  enabled: true
+  log_events: true
+  fail_on_error: false
+  webhook:
+    enabled: false
+    url: "${LIFECYCLE_WEBHOOK_URL:-}"
+    timeout_seconds: 5.0
 
 tracking:
   mlflow_tracking_uri: ${MLFLOW_TRACKING_URI}

@@ -11,6 +11,12 @@ from ..inference.releases.publisher import (
     PublishedServingRelease,
     publish_serving_release,
 )
+from ..notifications.contracts import (
+    NotificationSink,
+)
+from ..notifications.factory import (
+    build_notification_sink,
+)
 from ..pipeline.runner import (
     TrackedPipelineResult,
 )
@@ -28,6 +34,10 @@ from ..tracking.mlflow import (
 from ..tracking.model_artifact import (
     LoggedModelArtifact,
     log_model_artifact,
+)
+from .lifecycle_notifications import (
+    notify_candidate_outcome,
+    notify_lifecycle_failure,
 )
 from .prefect_adapter import (
     run_prefect_training_pipeline,
@@ -169,68 +179,121 @@ def run_prefect_model_lifecycle(
     mlflow_run_name: str | None = None,
     mlflow_tags: Mapping[str, str] | None = None,
     artifact_path: str = "model",
+    notification_sink: (
+        NotificationSink | None
+    ) = None,
 ) -> PrefectTrainingLifecycleResult:
-    """Run training, MLflow logging and model finalization."""
+    """Run training, finalization and lifecycle notifications."""
 
-    with start_training_run(
-        pipeline.config,
-        run_name=mlflow_run_name,
-        tags=mlflow_tags,
-    ) as mlflow_run_id:
-        tracked_result = (
-            run_prefect_training_pipeline(
-                pipeline=pipeline,
-                run_id=(
-                    pipeline_run_id
-                    or mlflow_run_id
+    sink = (
+        notification_sink
+        or build_notification_sink(
+            pipeline.config
+        )
+    )
+    active_run_id = (
+        pipeline_run_id
+        or mlflow_run_name
+        or "unassigned"
+    )
+
+    try:
+        with start_training_run(
+            pipeline.config,
+            run_name=mlflow_run_name,
+            tags=mlflow_tags,
+        ) as mlflow_run_id:
+            active_run_id = (
+                pipeline_run_id
+                or mlflow_run_id
+            )
+
+            tracked_result = (
+                run_prefect_training_pipeline(
+                    pipeline=pipeline,
+                    run_id=active_run_id,
+                )
+            )
+
+            pipeline_result = (
+                tracked_result.pipeline
+            )
+
+            log_training_result(
+                pipeline_result.training
+            )
+            log_evaluation_result(
+                pipeline_result.evaluation
+            )
+            model_artifact = (
+                log_model_artifact(
+                    logger=(
+                        pipeline.model_logger
+                    ),
+                    training_result=(
+                        pipeline_result.training
+                    ),
+                    config=pipeline.config,
+                    artifact_path=artifact_path,
+                )
+            )
+
+        candidate_result = (
+            finalize_configured_model_candidate(
+                training_result=(
+                    pipeline_result.training
+                ),
+                evaluation_result=(
+                    pipeline_result.evaluation
+                ),
+                config=pipeline.config,
+                artifact_path=artifact_path,
+                logged_model_uri=(
+                    model_artifact.model_uri
                 ),
             )
         )
 
-        pipeline_result = (
-            tracked_result.pipeline
+        serving_release = (
+            _publish_promoted_release(
+                pipeline=pipeline,
+                tracked_result=tracked_result,
+                candidate_result=(
+                    candidate_result
+                ),
+            )
         )
 
-        log_training_result(
-            pipeline_result.training
-        )
-        log_evaluation_result(
-            pipeline_result.evaluation
-        )
-        model_artifact = log_model_artifact(
-            logger=pipeline.model_logger,
-            training_result=(
-                pipeline_result.training
-            ),
+        notify_candidate_outcome(
+            sink=sink,
             config=pipeline.config,
-            artifact_path=artifact_path,
+            candidate=candidate_result,
+            serving_release=serving_release,
         )
 
-    candidate_result = (
-        finalize_configured_model_candidate(
-            training_result=(
-                pipeline_result.training
-            ),
-            evaluation_result=(
-                pipeline_result.evaluation
-            ),
-            config=pipeline.config,
-            artifact_path=artifact_path,
-            logged_model_uri=(
-                model_artifact.model_uri
-            ),
+        return PrefectTrainingLifecycleResult(
+            pipeline=tracked_result,
+            model_artifact=model_artifact,
+            candidate=candidate_result,
+            serving_release=serving_release,
         )
-    )
 
-    serving_release = _publish_promoted_release(
-        pipeline=pipeline,
-        tracked_result=tracked_result,
-        candidate_result=candidate_result,
-    )
+    except Exception as lifecycle_error:
+        try:
+            notify_lifecycle_failure(
+                sink=sink,
+                config=pipeline.config,
+                run_id=active_run_id,
+                error=lifecycle_error,
+            )
+        except Exception as notification_error:
+            raise ExceptionGroup(
+                "Model lifecycle and failure "
+                "notification both failed.",
+                [
+                    lifecycle_error,
+                    notification_error,
+                ],
+            ) from None
 
-    return PrefectTrainingLifecycleResult(
-        pipeline=tracked_result,
-        model_artifact=model_artifact,
-        candidate=candidate_result,
-        serving_release=serving_release,
-    )
+        raise

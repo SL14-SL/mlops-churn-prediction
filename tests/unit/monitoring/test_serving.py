@@ -2,8 +2,10 @@ import pytest
 
 from mlops_churn_prediction.monitoring.serving import (
     REQUEST_COUNT,
+    SERVING_READY,
     normalize_path,
     observe_request,
+    set_serving_readiness,
     should_ignore_path,
 )
 
@@ -61,3 +63,11 @@ def test_observe_request_increments_counter() -> None:
     )
 
     assert counter._value.get() == before + 1
+
+
+def test_set_serving_readiness_updates_gauge() -> None:
+    set_serving_readiness(False)
+    assert SERVING_READY._value.get() == 0
+
+    set_serving_readiness(True)
+    assert SERVING_READY._value.get() == 1
