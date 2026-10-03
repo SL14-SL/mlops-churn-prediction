@@ -741,13 +741,20 @@ environment infrastructure:
 - `infrastructure/terraform` provisions Artifact Registry, GCS, Secret Manager
   and the Cloud Run prediction API.
 
-The prediction API connects to an externally operated persistent MLflow service
-through `MLFLOW_TRACKING_URI`. The MLflow platform owner is responsible for its
-metadata database, artifact store, credentials, backups and recovery process.
+The deployed prediction API loads a portable serving release from the
+environment-specific GCS artifact bucket and does not require runtime access to
+MLflow. Training and release export may use an externally operated persistent
+MLflow service through `MLFLOW_TRACKING_URI`. The MLflow platform owner remains
+responsible for its metadata database, artifact store, credentials, backups and
+recovery process.
 
 Complete bootstrap, GitHub Environment and manual deployment instructions are
 documented in
 [docs/cloud-deployment.md](docs/cloud-deployment.md).
+
+The controlled removal of application and bootstrap infrastructure is
+documented in
+[docs/cloud-teardown.md](docs/cloud-teardown.md).
 
 Validate both Terraform modules locally:
 
