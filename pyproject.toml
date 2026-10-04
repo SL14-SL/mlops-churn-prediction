@@ -24,7 +24,6 @@ dependencies = [
     "prometheus-fastapi-instrumentator>=7.1.0",
     # GCP-first blueprint dependencies
     "gcsfs==2026.8.1",
-    "google-cloud-aiplatform>=1.139.0",
     "google-cloud-bigquery>=3.40.1",
     "google-cloud-bigquery-storage>=2.36.2",
     "google-cloud-run>=0.15.0",
