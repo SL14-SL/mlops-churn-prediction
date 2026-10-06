@@ -10,6 +10,7 @@ LOCAL_PREFECT_API_URL := http://localhost:4200/api
 PREFECT_POOL ?= local-pool
 PREFECT_PROJECT_DIR ?= $(CURDIR)
 MLFLOW_DATABASE_INSTANCE ?= mlflow-postgres-dev
+PROD_TRAINING_SERVICE_ACCOUNT ?= churn-prod-training@$(GCP_PROJECT_ID).iam.gserviceaccount.com
 
 .PHONY: all help setup dev dev-up dev-down logs dashboard-logs refresh-api \
 	ui-prefect ui-mlflow prefect-status wait-prefect prefect-pool \
@@ -341,21 +342,12 @@ start-mlflow-db-prod: check-prod-env ## Start the persistent MLflow Cloud SQL in
 		--quiet
 	@echo "✅ Cloud SQL instance is running."
 
-prepare-mlflow-prod-demo: start-mlflow-db-prod ## Prepare persistent MLflow production demo
-	@echo "🔥 Preparing persistent MLflow production demo..."
-	@echo "⏳ Waiting for MLflow health endpoint..."
-	@attempt=1; \
-	while [ $$attempt -le 60 ]; do \
-		if curl -fsS "$(MLFLOW_UI_URL)/health" > /dev/null; then \
-			echo "✅ MLflow is ready."; \
-			exit 0; \
-		fi; \
-		echo "MLflow is not ready yet: attempt=$$attempt"; \
-		attempt=$$((attempt + 1)); \
-		sleep 5; \
-	done; \
-	echo "❌ MLflow did not become healthy."; \
-	exit 1
+prepare-mlflow-prod-demo: start-mlflow-db-prod ## Prepare authenticated MLflow production demo
+	@echo "⏳ Waiting for private MLflow..."
+	@MLFLOW_TRACKING_AUTH=cloud_run \
+	MLFLOW_CLOUD_RUN_AUDIENCE="$(MLFLOW_UI_URL)" \
+	MLFLOW_AUTH_SERVICE_ACCOUNT="$(PROD_TRAINING_SERVICE_ACCOUNT)" \
+	uv run python scripts/wait_for_production_mlflow.py
 
 stop-mlflow-db-prod: check-prod-env ## Stop the MLflow Cloud SQL instance to limit costs
 	@echo "⏹️ Stopping Cloud SQL instance $(MLFLOW_DATABASE_INSTANCE)..."
@@ -384,31 +376,19 @@ predict-test-prod: check-prod-env ## Send a sample prediction request to the pro
 
 train-bootstrap-prod: prepare-mlflow-prod-demo upload-raw-prod ## Bootstrap initial production Champion
 	@echo "🌱 Bootstrapping initial production Champion..."
-	@set -eu; \
-		curl -fsS "$(MLFLOW_UI_URL)/health" > /dev/null; \
-		( \
-			while true; do \
-				curl -fsS "$(MLFLOW_UI_URL)/health" \
-					> /dev/null 2>&1 || true; \
-				sleep 10; \
-			done \
-		) & \
-		heartbeat_pid=$$!; \
-		cleanup() { \
-			kill "$$heartbeat_pid" 2>/dev/null || true; \
-			wait "$$heartbeat_pid" 2>/dev/null || true; \
-		}; \
-		trap cleanup EXIT INT TERM; \
-		PYTHONPATH=. \
-		APP_ENV=prod \
-		PREFECT_API_URL="$(PREFECT_API_URL)" \
-		PREFECT_API_KEY="$(PREFECT_API_KEY)" \
-		MLFLOW_TRACKING_URI="$(MLFLOW_UI_URL)" \
-		PREDICTION_API_URL="$(PREDICTION_API_URL)" \
-		GCP_BUCKET_NAME="$(GCP_BUCKET_NAME)" \
-		GCP_PROJECT_ID="$(GCP_PROJECT_ID)" \
-		API_KEY="$(API_KEY)" \
-		uv run --active python flows/training_flow.py --force --bootstrap
+	@PYTHONPATH=. \
+	APP_ENV=prod \
+	PREFECT_API_URL="$(PREFECT_API_URL)" \
+	PREFECT_API_KEY="$(PREFECT_API_KEY)" \
+	MLFLOW_TRACKING_URI="$(MLFLOW_UI_URL)" \
+	MLFLOW_TRACKING_AUTH=cloud_run \
+	MLFLOW_CLOUD_RUN_AUDIENCE="$(MLFLOW_UI_URL)" \
+	MLFLOW_AUTH_SERVICE_ACCOUNT="$(PROD_TRAINING_SERVICE_ACCOUNT)" \
+	PREDICTION_API_URL="$(PREDICTION_API_URL)" \
+	GCP_BUCKET_NAME="$(GCP_BUCKET_NAME)" \
+	GCP_PROJECT_ID="$(GCP_PROJECT_ID)" \
+	API_KEY="$(API_KEY)" \
+	uv run python flows/training_flow.py --force --bootstrap
 
 train-force-prod: check-prod-env ## Execute forced training against production cloud services
 	@echo "🧠 Starting forced production training flow..."
@@ -417,11 +397,14 @@ train-force-prod: check-prod-env ## Execute forced training against production c
 	PREFECT_API_URL="$(PREFECT_API_URL)" \
 	PREFECT_API_KEY="$(PREFECT_API_KEY)" \
 	MLFLOW_TRACKING_URI="$(MLFLOW_UI_URL)" \
+	MLFLOW_TRACKING_AUTH=cloud_run \
+	MLFLOW_CLOUD_RUN_AUDIENCE="$(MLFLOW_UI_URL)" \
+	MLFLOW_AUTH_SERVICE_ACCOUNT="$(PROD_TRAINING_SERVICE_ACCOUNT)" \
 	PREDICTION_API_URL="$(PREDICTION_API_URL)" \
 	GCP_BUCKET_NAME="$(GCP_BUCKET_NAME)" \
 	GCP_PROJECT_ID="$(GCP_PROJECT_ID)" \
 	API_KEY="$(API_KEY)" \
-	uv run --active python flows/training_flow.py --force
+	uv run python flows/training_flow.py --force
 
 verify-prod: check-prod-env ## Verify production liveness, readiness, lineage and prediction
 	@echo "🔍 Verifying production deployment..."
@@ -429,11 +412,14 @@ verify-prod: check-prod-env ## Verify production liveness, readiness, lineage an
 	APP_ENV=prod \
 	PRODUCTION_API_URL="$(PRODUCTION_API_BASE_URL)" \
 	MLFLOW_TRACKING_URI="$(MLFLOW_UI_URL)" \
+	MLFLOW_TRACKING_AUTH=cloud_run \
+	MLFLOW_CLOUD_RUN_AUDIENCE="$(MLFLOW_UI_URL)" \
+	MLFLOW_AUTH_SERVICE_ACCOUNT="$(PROD_TRAINING_SERVICE_ACCOUNT)" \
 	PREDICTION_API_URL="$(PREDICTION_API_URL)" \
 	GCP_BUCKET_NAME="$(GCP_BUCKET_NAME)" \
 	GCP_PROJECT_ID="$(GCP_PROJECT_ID)" \
 	API_KEY="$(API_KEY)" \
-	uv run --active python \
+	uv run python \
 		scripts/verify_production_deployment.py
 
 bootstrap-and-verify-prod: train-bootstrap-prod verify-prod ## Bootstrap and verify a fresh production demo
