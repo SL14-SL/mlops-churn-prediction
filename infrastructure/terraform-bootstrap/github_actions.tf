@@ -15,6 +15,7 @@ locals {
     "roles/secretmanager.admin",
     "roles/serviceusage.serviceUsageAdmin",
     "roles/storage.admin",
+    "roles/cloudsql.admin",
   ])
 }
 

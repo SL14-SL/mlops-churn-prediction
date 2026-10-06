@@ -45,3 +45,13 @@ output "cloud_run_service_uri" {
     null,
   )
 }
+
+output "mlflow_database_instance" {
+  description = "Cloud SQL instance hosting the MLflow database."
+  value       = google_sql_database_instance.mlflow.name
+}
+
+output "mlflow_database_connection_name" {
+  description = "Cloud SQL connection name used by MLflow."
+  value       = google_sql_database_instance.mlflow.connection_name
+}
