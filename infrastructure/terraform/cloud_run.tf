@@ -1,8 +1,14 @@
 locals {
   optional_runtime_environment = merge(
-    var.mlflow_tracking_uri != "" ? {
-      MLFLOW_TRACKING_URI = var.mlflow_tracking_uri
-    } : {},
+    var.deploy_mlflow ? {
+      MLFLOW_TRACKING_URI       = google_cloud_run_v2_service.mlflow[0].uri
+      MLFLOW_TRACKING_AUTH      = "cloud_run"
+      MLFLOW_CLOUD_RUN_AUDIENCE = google_cloud_run_v2_service.mlflow[0].uri
+      } : (
+      var.mlflow_tracking_uri != "" ? {
+        MLFLOW_TRACKING_URI = var.mlflow_tracking_uri
+      } : {}
+    ),
     var.prefect_api_url != "" ? {
       PREFECT_API_URL = var.prefect_api_url
     } : {},
@@ -128,6 +134,7 @@ resource "google_cloud_run_v2_service" "api" {
     ],
     google_secret_manager_secret_iam_member.api_access,
     google_storage_bucket_iam_member.api_artifacts,
+    google_cloud_run_v2_service_iam_member.api_mlflow_invoker,
   ]
 }
 
