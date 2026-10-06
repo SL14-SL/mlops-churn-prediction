@@ -52,6 +52,9 @@ jobs:
       DEPLOYMENT_API_KEY: ${{ secrets.API_KEY }}
       APPLY_CHANGES: ${{ inputs.apply_changes }}
 
+      TF_VAR_training_operator_email: ${{ vars.TRAINING_OPERATOR_EMAIL || '' }}
+      MLFLOW_DATABASE_PASSWORD: ${{ secrets.MLFLOW_DATABASE_PASSWORD }}
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -81,6 +84,13 @@ jobs:
             && [ -z "${DEPLOYMENT_API_KEY:-}" ]; then
             echo "Missing GitHub environment secret: API_KEY"
             exit 1
+          fi
+
+          if [ "$APPLY_CHANGES" = "true" ]; then
+            if ! [[ "${MLFLOW_DATABASE_PASSWORD:-}" =~ ^[a-fA-F0-9]{64}$ ]]; then
+              echo "MLFLOW_DATABASE_PASSWORD must contain exactly 64 hexadecimal characters."
+              exit 1
+            fi
           fi
 
       - name: Authenticate to Google Cloud
@@ -133,14 +143,26 @@ jobs:
           -input=false
           -out=foundation.tfplan
           -var="deploy_cloud_run=false"
+          -var="deploy_mlflow=false"
           -var="container_image=${IMAGE_URI}"
           -target="google_project_service.required"
+          -target="google_project_service.sqladmin"
           -target="google_artifact_registry_repository.containers"
           -target="google_storage_bucket.artifacts"
           -target="google_service_account.api"
           -target="google_storage_bucket_iam_member.api_artifacts"
           -target="google_secret_manager_secret.api_key"
           -target="google_secret_manager_secret_iam_member.api_access"
+          -target="google_sql_database_instance.mlflow"
+          -target="google_sql_database.mlflow"
+          -target="google_service_account.mlflow"
+          -target="google_project_iam_member.mlflow_sql_client"
+          -target="google_storage_bucket_iam_member.mlflow_artifacts"
+          -target="google_secret_manager_secret.mlflow_database_password"
+          -target="google_secret_manager_secret_iam_member.mlflow_database_password"
+          -target="google_service_account.training"
+          -target="google_storage_bucket_iam_member.training_artifacts"
+          -target="google_service_account_iam_member.training_operator"
 
       - name: Apply foundational infrastructure
         if: ${{ inputs.apply_changes }}
@@ -150,6 +172,51 @@ jobs:
           -input=false
           -auto-approve
           foundation.tfplan
+
+      - name: Configure MLflow database user
+        if: ${{ inputs.apply_changes }}
+        working-directory: infrastructure/terraform
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          instance_name="$(terraform output -raw mlflow_database_instance)"
+
+          existing_user="$(
+            gcloud sql users list \
+              --instance "${instance_name}" \
+              --project "${GCP_PROJECT_ID}" \
+              --filter="name=mlflow" \
+              --format="value(name)"
+          )"
+
+          if [ "${existing_user}" = "mlflow" ]; then
+            gcloud sql users set-password mlflow \
+              --instance "${instance_name}" \
+              --project "${GCP_PROJECT_ID}" \
+              --password "${MLFLOW_DATABASE_PASSWORD}"
+          else
+            gcloud sql users create mlflow \
+              --instance "${instance_name}" \
+              --project "${GCP_PROJECT_ID}" \
+              --password "${MLFLOW_DATABASE_PASSWORD}"
+          fi
+
+      - name: Publish MLflow database password
+        if: ${{ inputs.apply_changes }}
+        working-directory: infrastructure/terraform
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          secret_name="$(
+            terraform output -raw mlflow_database_password_secret_name
+          )"
+
+          printf '%s' "${MLFLOW_DATABASE_PASSWORD}" \
+            | gcloud secrets versions add "${secret_name}" \
+                --project "${GCP_PROJECT_ID}" \
+                --data-file=-
 
       - name: Publish API key to Secret Manager
         if: ${{ inputs.apply_changes }}
