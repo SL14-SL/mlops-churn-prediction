@@ -73,3 +73,8 @@ output "mlflow_service_uri" {
     null,
   )
 }
+
+output "training_service_account_email" {
+  description = "Service account used by production training."
+  value       = google_service_account.training.email
+}

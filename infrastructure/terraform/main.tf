@@ -14,6 +14,7 @@ locals {
     "run.googleapis.com",
     "secretmanager.googleapis.com",
     "storage.googleapis.com",
+    "iamcredentials.googleapis.com",
   ])
 }
 

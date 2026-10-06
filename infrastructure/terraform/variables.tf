@@ -130,3 +130,9 @@ variable "mlflow_container_image" {
   type        = string
   default     = ""
 }
+
+variable "training_operator_email" {
+  description = "Google account allowed to impersonate the training service account."
+  type        = string
+  default     = ""
+}
