@@ -4,6 +4,9 @@ resource "google_project_service" "sqladmin" {
   disable_on_destroy = false
 }
 
+# Public IP provides connectivity for the Cloud Run Cloud SQL Auth Proxy.
+# Connector enforcement rejects direct connections; no authorized networks.
+# trivy:ignore:GCP-0017
 resource "google_sql_database_instance" "mlflow" {
   project          = var.gcp_project_id
   name             = "${local.name_prefix}-mlflow-db"
@@ -24,8 +27,10 @@ resource "google_sql_database_instance" "mlflow" {
 
     ip_configuration {
       ipv4_enabled = true
-      # No authorized networks: access through Cloud SQL connector.
+      ssl_mode     = "ENCRYPTED_ONLY"
     }
+
+    connector_enforcement = "REQUIRED"
 
     backup_configuration {
       enabled                        = true
