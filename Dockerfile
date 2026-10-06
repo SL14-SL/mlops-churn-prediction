@@ -44,6 +44,7 @@ USER mluser
 # 6. Install project dependencies
 # Copy only metadata first to leverage Docker layer caching
 COPY --chown=mluser:mlgroup pyproject.toml uv.lock ./
+COPY --chown=mluser:mlgroup plugins/ /app/plugins/
 
 # IMPORTANT: --no-install-project prevents uv from trying to build your 
 # local code as a package during the build phase, avoiding 'egg-info' issues.

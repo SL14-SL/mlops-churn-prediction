@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mlflow-cloud-run-auth"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "google-auth>=2,<3",
+    "requests>=2,<3",
+    "mlflow-skinny>=3.16,<4",
+]
+
+[project.entry-points."mlflow.request_auth_provider"]
+cloud_run = "mlflow_cloud_run_auth:CloudRunAuthProvider"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mlflow_cloud_run_auth"]
