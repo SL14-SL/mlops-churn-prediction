@@ -242,6 +242,18 @@ def build_probability_chart(df: pd.DataFrame) -> go.Figure:
         yaxis_title="Number of Predictions",
     )
 
+    fig.update_xaxes(
+        title_font=dict(size=18),
+        tickfont=dict(size=16),
+    )
+    fig.update_yaxes(
+        title_font=dict(size=18),
+        tickfont=dict(size=16),
+    )
+    fig.update_layout(
+        legend_font=dict(size=16),
+    )
+
     return fig
 
 
@@ -280,9 +292,14 @@ def build_action_chart(
         hole=0.35,
     )
 
+    fig.update_traces(
+        textinfo="percent",
+        textfont=dict(size=18, color="white"),
+    )
     fig.update_layout(
         height=420,
         template="plotly_dark",
+        legend_font=dict(size=16),
     )
 
     return fig
@@ -366,6 +383,23 @@ def build_profit_curve_chart(df: pd.DataFrame) -> go.Figure:
         title_text="Actions Selected",
         rangemode="tozero",
         secondary_y=True,
+    )
+
+    fig.update_xaxes(
+        title_font=dict(size=18),
+        tickfont=dict(size=16),
+    )
+    fig.update_yaxes(
+        title_font=dict(size=18),
+        tickfont=dict(size=16),
+    )
+    fig.update_layout(
+        legend_font=dict(size=16),
+    )
+
+    fig.update_traces(
+        line=dict(width=4),
+        selector=dict(type="scatter"),
     )
 
     return fig
@@ -609,8 +643,24 @@ def build_performance_history_chart(
         },
     )
 
-    return fig
+    fig.update_xaxes(
+        title_font=dict(size=18),
+        tickfont=dict(size=16),
+    )
+    fig.update_yaxes(
+        title_font=dict(size=18),
+        tickfont=dict(size=16),
+    )
+    fig.update_layout(
+        legend_font=dict(size=16),
+    )
 
+    fig.update_traces(
+        line=dict(width=4),
+        selector=dict(type="scatter"),
+    )
+
+    return fig
 
 prediction_df = load_prediction_log()
 ground_truth_df = load_ground_truth()
@@ -621,9 +671,15 @@ profit_curve_df = load_profit_curve()
 uplift_sensitivity_df = load_uplift_sensitivity()
 
 
-st.title("🛡️ Churn Prediction - Adaptive Monitoring")
+st.title("Churn Prediction & Retention Monitoring")
 st.markdown(
-    "Monitoring churn risk, model quality, retention actions, and business impact."
+    "Track churn risk, retention recommendations, model performance "
+    "and retraining decisions."
+)
+st.caption(
+    "Demo results from a controlled concept-drift experiment. "
+    "Business outcomes are simulated using configured customer values, "
+    "intervention costs and uplift assumptions."
 )
 
 if prediction_df is None or prediction_df.empty:
@@ -772,7 +828,7 @@ else:
             expected_profit / labeled_action_count if labeled_action_count > 0 else 0.0
         )
 
-        st.subheader("💶 Labeled Business Outcomes")
+        st.subheader("💶 Simulated Business Outcomes")
 
         r1, r2, r3, r4 = st.columns(4)
         r1.metric(
@@ -925,10 +981,10 @@ else:
         best_realized = profit_curve_df.loc[profit_curve_df["realized_profit"].idxmax()]
 
         st.caption(
-            "Each threshold re-simulates action selection "
-            "using the configured customer value, action "
-            "costs, and uplift assumptions. The dotted line "
-            "shows how many actions remain eligible."
+            "Uses logged customer values and configured intervention costs, uplift "
+            "assumptions and per-request discount budgets. Each threshold filters "
+            "budget-allocated actions; freed budget is not reallocated. "
+            "Profit totals cover predictions with available labels."
         )
         st.caption(
             "Highest simulated realized profit within "
