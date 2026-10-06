@@ -85,3 +85,11 @@ reconciliation:
 - Task type: classification
 - Project slug: mlops-churn-prediction
 - Migration branch: chore/adopt-template-v0.3.0
+
+## Project cloud extension after the baseline
+
+The churn project now provisions persistent MLflow on Cloud Run with Cloud SQL,
+GCS artifacts, Secret Manager credentials and renewable Cloud Run authentication.
+These additions are project-owned until explicitly integrated into the source
+template. The migration baseline above does not establish feature parity with
+the forecasting project or later template releases.

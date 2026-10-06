@@ -45,6 +45,11 @@ source .env
 set +a
 
 export INCIDENT_ENV="prod"
+export CLOUD_RUN_API_SERVICE="mlops-churn-prediction-prod-api"
+export CLOUD_RUN_MLFLOW_SERVICE="mlops-churn-prediction-prod-mlflow"
+export MLFLOW_TRACKING_AUTH="cloud_run"
+export MLFLOW_TRACKING_TOKEN_AUDIENCE="$MLFLOW_UI_URL"
+export MLFLOW_AUTH_SERVICE_ACCOUNT="$PROD_TRAINING_SERVICE_ACCOUNT"
 export API_BASE_URL="${PREDICTION_API_URL%/predict}"
 export MLFLOW_BASE_URL="${MLFLOW_UI_URL%/}"
 export PROMETHEUS_URL="http://localhost:9090"
@@ -72,6 +77,10 @@ test -n "$PROMETHEUS_URL"
 Never put API keys, Prefect keys, webhook URLs or credentials in an incident
 report.
 
+The commands below assume an active deployment. The documented demo was torn
+down on 6 October 2026. Public demo API routes use the application key where
+required; an IAM-protected API also requires a Cloud Run identity token.
+
 ## 4. General Initial Diagnosis
 
 ### 4.1 Check service status
@@ -85,29 +94,33 @@ docker compose ps
 Production:
 
 ```bash
-gcloud run services describe churn-prediction-api \
+gcloud run services describe "$CLOUD_RUN_API_SERVICE" \
   --project "$GCP_PROJECT_ID" \
   --region "$GCP_REGION" \
   --format='yaml(metadata.name,status.url,status.traffic,status.conditions)'
 ```
 
-The MLflow service is operated independently from this repository. Verify its
-configured endpoint:
+The private MLflow service and its Cloud SQL database are provisioned by this
+repository. Check them with the authenticated helper and platform logs:
 
 ```bash
-curl -fsS "${MLFLOW_BASE_URL}/health"
+uv run python scripts/wait_for_production_mlflow.py
+
+gcloud run services describe "$CLOUD_RUN_MLFLOW_SERVICE" \
+  --project "$GCP_PROJECT_ID" --region "$GCP_REGION"
+gcloud sql instances describe "$MLFLOW_DATABASE_INSTANCE" \
+  --project "$GCP_PROJECT_ID"
 ```
 
-If this check fails, use the operational runbook of the MLflow platform and
-contact its owning team. The API deployment workflow does not provision or
-repair the MLflow metadata database or artifact store.
+A stopped Cloud SQL instance can be started intentionally with
+`make prepare-mlflow-prod-demo`. This changes the instance activation policy.
 
 A successful health response does not prove that registry data is available.
 Verify the registered model and `champion` alias as well:
 
 ```bash
 MLFLOW_TRACKING_URI="$MLFLOW_BASE_URL" \
-uv run --active python - <<'PY'
+uv run python - <<'PY'
 from mlflow import MlflowClient
 
 client = MlflowClient()
@@ -168,8 +181,7 @@ Production:
 
 ```bash
 gcloud logging read \
-  'resource.type="cloud_run_revision"
-   AND resource.labels.service_name="churn-prediction-api"' \
+  "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${CLOUD_RUN_API_SERVICE}\"" \
   --project "$GCP_PROJECT_ID" \
   --freshness=30m \
   --limit=500 \
@@ -216,11 +228,11 @@ Production:
 
 ```bash
 gcloud run revisions list \
-  --service churn-prediction-api \
+  --service "$CLOUD_RUN_API_SERVICE" \
   --project "$GCP_PROJECT_ID" \
   --region "$GCP_REGION"
 
-gcloud run services describe churn-prediction-api \
+gcloud run services describe "$CLOUD_RUN_API_SERVICE" \
   --project "$GCP_PROJECT_ID" \
   --region "$GCP_REGION" \
   --format=json | jq '.status.traffic'
@@ -240,7 +252,7 @@ known-good application image through CI/CD. If necessary, return traffic to a
 recorded known-good revision:
 
 ```bash
-gcloud run services update-traffic churn-prediction-api \
+gcloud run services update-traffic "$CLOUD_RUN_API_SERVICE" \
   --project "$GCP_PROJECT_ID" \
   --region "$GCP_REGION" \
   --to-revisions '<known-good-revision>=100'
@@ -278,8 +290,8 @@ Potential causes:
 - missing feature schema or prediction probe;
 - checksum failure;
 - unavailable registered model or numeric model version;
-- the external MLflow service or its metadata database is unavailable;
-- the external MLflow artifact store cannot be accessed;
+- the private MLflow service or its metadata database is unavailable;
+- the MLflow GCS artifact store cannot be accessed;
 - API credentials, network access or IAM prevent registry or artifact loading.
 
 ### Diagnosis
@@ -309,10 +321,10 @@ gcloud storage cat \
 Inspect the selected manifest with `gcloud storage cat` and compare its numeric
 model version with the MLflow registry.
 
-Check the external MLflow dependency chain:
+Check the private MLflow dependency chain:
 
 ```bash
-curl -fsS "${MLFLOW_BASE_URL}/health"
+uv run python scripts/wait_for_production_mlflow.py
 ```
 
 Verify that:
@@ -323,8 +335,10 @@ Verify that:
 4. the serving manifest references the same model version and run ID;
 5. API credentials and network access permit registry and artifact loading.
 
-Use the external MLflow platform's own logs and operational runbook for
-database, storage or service-level diagnosis.
+Inspect MLflow Cloud Run startup logs, the Cloud SQL instance state, the
+Secret Manager database-password version and the runtime IAM bindings.
+401/403 indicates an authentication or authorization problem; startup database
+errors require separate Cloud SQL and credential diagnosis.
 
 
 ### Immediate actions
@@ -338,7 +352,7 @@ curl -fsS -X POST \
   | jq .
 ```
 
-- Escalate MLflow, database or artifact-store outages to the platform owner.
+- Diagnose MLflow, Cloud SQL and GCS availability before changing the model.
 - Confirm registry and artifact availability before retrying the bundle reload.
 - Retry the bundle reload only after MLflow registry access is confirmed.
 - Prefer rollback when the active release references an unavailable model version.
@@ -375,7 +389,7 @@ Escalate when:
 - the previous release also cannot be loaded;
 - MLflow is healthy but registered models or aliases are missing;
 - the model version exists but its artifact cannot be loaded;
-- the external MLflow platform reports metadata or artifact-store failures;
+- the MLflow platform reports metadata or artifact-store failures;
 - MLflow credentials, network access or platform IAM changes are required;
 - recovery requires metadata-database restoration or credential rotation.
 
@@ -473,7 +487,7 @@ docker compose logs --since=30m api \
 Production resources:
 
 ```bash
-gcloud run services describe churn-prediction-api \
+gcloud run services describe "$CLOUD_RUN_API_SERVICE" \
   --project "$GCP_PROJECT_ID" \
   --region "$GCP_REGION" \
   --format='yaml(template.scaling,template.containers.resources,status.traffic)'
@@ -517,7 +531,7 @@ previous model is demonstrably faster under comparable requests.
 
 ### Actions
 
-Run the automatic policy once:
+Run the automatic policy once in the local stack:
 
 ```bash
 make auto-retrain
@@ -612,7 +626,7 @@ Close an incident only when:
 - affected alerts return to `inactive`;
 - metrics remain stable for at least one alert window;
 - emergency API infrastructure changes are reconciled with Terraform and CI/CD;
-- external MLflow platform changes are recorded by its owning team.
+- MLflow platform changes are recorded by its owning team.
 
 Document:
 
@@ -620,7 +634,7 @@ Document:
 - start and end time;
 - alert and severity;
 - Cloud Run revision where applicable;
-- external MLflow service state when tracking or model loading was affected;
+- MLflow service state when tracking or model loading was affected;
 - MLflow metadata-database and artifact-store availability;
 - release ID before and after remediation;
 - model version and run ID;
@@ -638,4 +652,3 @@ Document:
 - [Google Cloud deployment](cloud-deployment.md)
 - [Serving releases](serving-releases.md)
 - [Monitoring, SLOs and alerting](monitoring-and-slos.md)
-

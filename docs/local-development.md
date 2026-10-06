@@ -59,8 +59,11 @@ docker compose ps
 | Alertmanager | http://localhost:9093 |
 
 <p align="center">
-  <img src="images/swagger_ui.png" width="85%" alt="Churn API Swagger UI">
+  <img src="images/classification-swagger-ui.png" width="85%" alt="Production Swagger UI showing the shared churn API routes">
 </p>
+
+The Swagger screenshot was captured from the production demo; the local API
+exposes the same route groups.
 
 ## Initial Bootstrap
 
@@ -80,6 +83,7 @@ Verify serving:
 curl -fsS http://localhost:8000/livez | jq .
 curl -fsS http://localhost:8000/readyz | jq .
 curl -fsS http://localhost:8000/health | jq .
+make test-serving-e2e
 make predict-test
 ```
 
@@ -144,7 +148,7 @@ branch using identical ordered customer observations.
 Run the real-label customer-cohort shift:
 
 ```bash
-make churn-cohort-shift-comparison
+make churn-retraining-comparison
 make churn-cohort-shift-comparison-plot
 ```
 Run the audited synthetic concept-drift experiment:
@@ -274,6 +278,22 @@ Keep the Prefect Docker image aligned with the version in `pyproject.toml` and
 | Host | `http://localhost:5000` | `http://localhost:4200/api` | `http://localhost:8000` |
 | Container | `http://mlflow:5000` | `http://prefect:4200/api` | `http://api:8080` |
 
+### Empty Streamlit dashboard despite existing predictions
+
+The dashboard resolves its data directory from `PROJECT_ROOT`. In the source
+layout, `src/mlops_churn_prediction/constants.py` must resolve the repository
+root rather than `/app/src`. Verify the expected path and mounted data:
+
+```bash
+docker compose exec -T dashboard uv run --no-sync python -c \
+  "from mlops_churn_prediction.constants import PROJECT_ROOT; print(PROJECT_ROOT)"
+docker compose exec -T dashboard ls -lh /app/data/predictions/inference_log.parquet
+```
+
+Reload the dashboard after correcting the path. Use one experiment's matching
+predictions, delayed labels and performance history for a coherent dashboard.
+Archived monitoring tables alone are not a replacement for inference logs.
+
 ### Clean reset
 
 Use the guarded target when a completely fresh local registry and serving state
@@ -298,4 +318,3 @@ make train-bootstrap
 - [Retraining policy](retraining-policy.md)
 - [Monitoring and SLOs](monitoring-and-slos.md)
 - [Operations runbook](operations-runbook.md)
-

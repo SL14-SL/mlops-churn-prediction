@@ -11,6 +11,11 @@ The teardown is intentionally separated into two stages:
 Always destroy application environments before destroying the bootstrap
 resources they depend on.
 
+The recorded demonstration completed teardown on 6 October 2026: 29
+application resources and 18 bootstrap resources were destroyed, both Terraform
+states were empty, and SQL, Cloud Run, storage, Artifact Registry and Secret
+Manager listings returned no demo resources. The GCP project itself remains.
+
 ## Safety rules
 
 Before continuing:
@@ -109,6 +114,36 @@ terraform \
 The backup can contain sensitive infrastructure data. Keep it outside
 the repository and delete it when it is no longer required.
 
+## Unlock Application Deletion Protection
+
+The MLflow database has Terraform deletion protection. Temporarily change
+`deletion_protection = true` to `false` in
+`infrastructure/terraform/mlflow_database.tf`.
+
+The artifact bucket also requires `force_destroy_artifact_bucket=true` if its
+objects are intentionally being removed. Apply those protection changes before
+creating the destroy plan; a destroy plan alone does not persist the unlock.
+Use the same project, region, environment and repository values as deployment.
+
+```bash
+terraform -chdir=infrastructure/terraform plan \
+  -out=unlock-destroy.tfplan \
+  -var="gcp_project_id=${GCP_PROJECT_ID}" \
+  -var="region=${GCP_REGION}" \
+  -var="environment=${DEPLOYMENT_ENVIRONMENT}" \
+  -var="artifact_registry_repository=mlops-churn-prediction-images" \
+  -var="container_image=unused" \
+  -var="force_destroy_artifact_bucket=true" \
+  -target=google_sql_database_instance.mlflow \
+  -target=google_storage_bucket.artifacts
+terraform -chdir=infrastructure/terraform show -no-color unlock-destroy.tfplan
+terraform -chdir=infrastructure/terraform apply unlock-destroy.tfplan
+```
+
+The targeted plan is limited to the explicit protection changes and their
+Terraform dependencies. Stop if it proposes unrelated changes or resource
+removal. Do not commit the temporary database protection change.
+
 ## Review the application destroy plan
 
 Create a saved destroy plan:
@@ -123,7 +158,9 @@ terraform \
   -var="gcp_project_id=${GCP_PROJECT_ID}" \
   -var="environment=${DEPLOYMENT_ENVIRONMENT}" \
   -var="container_image=unused" \
-  -var="deploy_cloud_run=true"
+  -var="region=${GCP_REGION}" \
+  -var="artifact_registry_repository=mlops-churn-prediction-images" \
+  -var="force_destroy_artifact_bucket=true"
 ```
 
 Render the plan for review:
@@ -152,7 +189,7 @@ environment.
 
 The environment artifact bucket can contain:
 
-- portable serving releases;
+- serving manifests, feature schemas and prediction probes;
 - model artifacts;
 - monitoring data;
 - prediction logs;
@@ -161,7 +198,7 @@ The environment artifact bucket can contain:
 List the bucket before destruction:
 
 ```bash
-ARTIFACT_BUCKET="${GCP_PROJECT_ID}-${DEPLOYMENT_ENVIRONMENT}-artifacts"
+ARTIFACT_BUCKET="${GCP_PROJECT_ID}-mlops-churn-prediction-${DEPLOYMENT_ENVIRONMENT}-artifacts"
 
 gcloud storage du \
   --summarize \
@@ -188,6 +225,15 @@ terraform \
   -input=false \
   destroy.tfplan
 ```
+
+Restore the database protection setting after destruction:
+
+```bash
+git restore -- infrastructure/terraform/mlflow_database.tf
+```
+
+Use `git restore` only when that file has no unrelated uncommitted changes;
+otherwise restore just the temporary protection edit.
 
 Confirm that the application state is empty:
 
@@ -275,6 +321,18 @@ prevent_destroy = false
 
 Do not commit these temporary protection changes.
 
+Persist the bucket force-deletion setting before its destroy plan:
+
+```bash
+terraform -chdir=infrastructure/terraform-bootstrap plan \
+  -target=google_storage_bucket.terraform_state -out=bootstrap-unlock.tfplan
+terraform -chdir=infrastructure/terraform-bootstrap show -no-color bootstrap-unlock.tfplan
+terraform -chdir=infrastructure/terraform-bootstrap apply bootstrap-unlock.tfplan
+```
+
+Keep the original bootstrap variable file and local state available. Review the
+plan to confirm that only the intended bucket protection is changing.
+
 ## Review the bootstrap destroy plan
 
 Inspect the resources tracked by the bootstrap state:
@@ -359,6 +417,12 @@ gh secret delete \
   --env "$DEPLOYMENT_ENVIRONMENT"
 ```
 
+Also remove the database secret if the environment is being retired:
+
+```bash
+gh secret delete MLFLOW_DATABASE_PASSWORD --env "$DEPLOYMENT_ENVIRONMENT"
+```
+
 Remove an environment-specific service-name override if configured:
 
 ```bash
@@ -383,7 +447,8 @@ for variable_name in \
   GCS_STORAGE_LOCATION \
   ALLOW_UNAUTHENTICATED \
   MLFLOW_TRACKING_URI \
-  PREFECT_API_URL
+  PREFECT_API_URL \
+  TRAINING_OPERATOR_EMAIL
 do
   gh variable delete \
     "$variable_name" \
@@ -396,6 +461,13 @@ Do not remove repository-level variables while another GitHub
 Environment still uses them.
 
 ## Final verification
+
+Check Cloud SQL and secrets as well as the other managed resources:
+
+```bash
+gcloud sql instances list --project "$GCP_PROJECT_ID"
+gcloud secrets list --project "$GCP_PROJECT_ID"
+```
 
 Check for remaining relevant resources:
 
@@ -430,6 +502,8 @@ teardown has been verified:
 rm \
   -f \
   infrastructure/terraform/destroy.tfplan \
+  infrastructure/terraform/unlock-destroy.tfplan \
+  infrastructure/terraform-bootstrap/bootstrap-unlock.tfplan \
   infrastructure/terraform-bootstrap/bootstrap-destroy.tfplan \
   "/tmp/mlops-churn-prediction-${DEPLOYMENT_ENVIRONMENT}-before-destroy.tfstate" \
   /tmp/mlops-churn-prediction-destroy-plan.txt \

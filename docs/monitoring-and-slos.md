@@ -117,7 +117,11 @@ The provisioned dashboard presents:
 need matching counters and enough observations in the selected lookback window.
 
 <p align="center">
-  <img src="images/grafana_dashboard_slo.png" width="100%" alt="Grafana dashboard showing API availability, latency, error rate and serving readiness">
+  <img src="images/classification-grafana-slo-overview.png" width="100%" alt="Grafana dashboard showing API availability, latency, error rate and serving readiness">
+</p>
+
+<p align="center">
+  <img src="images/classification-grafana-prediction-overview.png" width="100%" alt="Local Grafana prediction throughput and latency">
 </p>
 
 ## ML Quality Monitoring
@@ -174,18 +178,23 @@ Labeled business outcomes cover:
 - expected net profit;
 - gross saved value;
 - intervention costs;
-- realized net profit;
-- expected and realized profit per labeled action.
+- label-based simulated net profit;
+- expected and simulated profit per labeled action.
 
 The relationship between the realized business metrics is:
 
 ```text
-gross saved value - intervention costs = realized net profit
+simulated gross saved value - intervention costs = simulated net profit
 ```
 
 The policy-analysis view additionally shows how increasing the minimum expected
 profit required per action changes the selected action volume and simulated
 portfolio profit.
+
+Business outcomes use assumed intervention uplift, not measured treatment
+effects. Offline analysis uses a common policy implementation for profit curves
+and uplift sensitivity. Minimum-profit filtering is a scenario comparison, not
+evidence of realized campaign revenue.
 
 ## Dashboard Roles
 
@@ -195,12 +204,25 @@ portfolio profit.
 | Streamlit | Model quality, delayed labels and business decisions |
 
 <p align="center">
-  <img src="images/streamlit_dashboard_overview.png" width="100%" alt="Churn monitoring dashboard">
+  <img src="images/classification-dashboard-overview.png" width="100%" alt="Local churn monitoring overview">
 </p>
 
 <p align="center">
-  <img src="images/streamlit_dashboard_business.png" width="100%" alt="Churn business dashboard">
+  <img src="images/classification-model-performance-trend.png" width="100%" alt="Local model performance and retraining events">
 </p>
+
+<p align="center">
+  <img src="images/classification-churn-probability-distribution-retention-actions.png" width="100%" alt="Churn probability and retention-action distributions">
+</p>
+
+<p align="center">
+  <img src="images/classification-business-policy-analysis.png" width="100%" alt="Offline business policy and uplift sensitivity">
+</p>
+
+The dashboard screenshots use local controlled experiment data. Terraform
+does not provision the Streamlit or Grafana stack in Google Cloud. Choose a
+lookback window containing prediction traffic; an empty short window does not
+establish an outage.
 
 ## Verification Commands
 
@@ -234,4 +256,3 @@ release ID with the previous release and use the tested rollback procedure.
 - [Serving releases](serving-releases.md)
 - [Retraining policy](retraining-policy.md)
 - [Operations runbook](operations-runbook.md)
-

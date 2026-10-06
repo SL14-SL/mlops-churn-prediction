@@ -95,20 +95,8 @@ Every deployable model is represented by an immutable release manifest. A releas
 - configuration hash
 - Git commit
 
-<p align="center">
-  <img
-    src="docs/images/gcs_serving_release_overview.png"
-    width="100%"
-    alt="Immutable churn serving release stored in Google Cloud Storage"
-  >
-</p>
-
-<p align="center">
-  <em>
-    Immutable production serving release containing the feature schema,
-    semantic prediction probe and versioned serving manifest.
-  </em>
-</p>
+The production verification below checks the active GCS release pointer against
+the API readiness and prediction lineage.
 
 The API validates the complete bundle before replacing the active serving state. A failed reload therefore keeps the previous working bundle active.
 
@@ -165,7 +153,7 @@ Example response:
 ```
 
 <p align="center">
-  <img src="docs/images/swagger_ui.png" width="100%" alt="FastAPI Swagger UI">
+  <img src="docs/images/classification-swagger-ui.png" width="100%" alt="FastAPI Swagger UI">
 </p>
 
 ---
@@ -180,7 +168,7 @@ Each action can incorporate:
 - estimated customer value
 - intervention cost
 - expected uplift
-- minimum expected profit
+- minimum expected profit in offline policy analysis
 - campaign budget
 
 Example configuration:
@@ -191,7 +179,8 @@ cost_discount: 10
 cost_contact: 2
 discount_uplift: 0.3
 contact_uplift: 0.1
-min_expected_profit: 0.0
+max_discount_budget: 20
+max_discount_rate: 0.2
 ```
 
 The decision engine supports actions such as `offer_discount`, `send_email` and `no_action`. Batch prioritization selects the most valuable interventions under the configured policy and budget.
@@ -219,7 +208,7 @@ A Challenger is evaluated primarily on recent labeled production data. Promotion
 Retraining and promotion are intentionally separate decisions: monitoring may trigger and execute a training run without replacing the active Champion.
 
 <p align="center">
-  <img src="docs/images/prefect_flow.png" width="100%" alt="Prefect training flow">
+  <img src="docs/images/classification-prefect-training-and-promotion.png" width="100%" alt="Prefect training flow">
 </p>
 
 
@@ -281,37 +270,20 @@ MLflow tracks parameters, metrics, artifacts and model lineage. Classification m
 
 Dataset versions, configuration hashes and Git commits connect each registered model and serving release to the code and data used to create it.
 
-The screenshots below show a verified model lifecycle with persistent MLflow
-tracking and registry state. The registered model uses a versioned `champion`
-alias and retains its run lineage independently of prediction-API revisions.
+The local registry screenshot shows registered model versions and the
+`champion` alias produced by the controlled lifecycle experiments. Local model
+versions and the independently bootstrapped production registry are separate.
 
-In the current deployment architecture, MLflow is operated as an external
-platform with its own persistent metadata database and artifact store. This
-repository does not provision the MLflow platform.
-
-<p align="center">
-  <img
-    src="docs/images/mlflow_run_overview.png"
-    width="100%"
-    alt="Production MLflow churn run with classification metrics and lineage"
-  >
-</p>
+Terraform now provisions a private MLflow Cloud Run service, a persistent
+Cloud SQL PostgreSQL database and a GCS artifact store. API and training
+identities invoke MLflow using renewable Cloud Run identity tokens through
+`plugins/mlflow-cloud-run-auth`. Registry metadata survives API revision changes;
+model loading during startup or reload still requires MLflow availability.
 
 <p align="center">
-  <img
-    src="docs/images/mlflow_models_overview.png"
-    width="100%"
-    alt="Production churn run linked to its registered model artifact"
-  >
+  <img src="docs/images/classification-mlflow-model-registry.png" width="100%" alt="Local MLflow registry with versioned Champion alias">
 </p>
 
-<p align="center">
-  <img
-    src="docs/images/mlflow_registered_model.png"
-    width="100%"
-    alt="Production churn model with versioned champion alias"
-  >
-</p>
 
 ---
 
@@ -331,7 +303,7 @@ The monitoring layer combines ML, business and service-level signals.
 The Streamlit lifecycle dashboard combines current inference activity with
 label-dependent model and business outcomes. Prediction volume, active decision
 thresholds and retention actions cover all logged predictions, while
-classification performance and realized business metrics are calculated only
+classification performance and simulated business metrics are calculated only
 after delayed labels become available.
 
 Retraining executions and successful Champion promotions are shown as separate
@@ -339,11 +311,15 @@ events. This makes it possible to distinguish model training from the governed
 decision to replace the active production model.
 
 The dashboard screenshot was captured from the local controlled lifecycle
-experiment. The same monitoring code supports filesystem-backed local runs and
-GCS-backed production data through the project's storage abstraction.
+experiment. The Streamlit screenshots use local filesystem data. The dashboard
+is not deployed to Cloud Run by the current Terraform stack.
 
 <p align="center">
-  <img src="docs/images/streamlit_dashboard_overview.png" width="100%" alt="Streamlit dashboard showing prediction activity, labeled business outcomes, model performance and retraining lifecycle events">
+  <img src="docs/images/classification-dashboard-overview.png" width="100%" alt="Local churn monitoring overview with simulated business outcomes">
+</p>
+
+<p align="center">
+  <img src="docs/images/classification-model-performance-trend.png" width="100%" alt="Local rolling model performance and retraining lifecycle events">
 </p>
 
 ### Business monitoring and policy analysis
@@ -352,9 +328,9 @@ Business monitoring covers:
 
 - churn-risk distribution
 - retention-action distribution
-- expected and realized net profit
+- expected and label-based simulated net profit
 - gross saved value and intervention costs
-- expected and realized profit per labeled action
+- expected and simulated profit per labeled action
 - sensitivity of action selection to minimum-profit requirements
 
 The business-policy view separates model predictions from the downstream
@@ -363,7 +339,11 @@ retention actions and how increasing the minimum required profit per action
 changes both the selected action volume and the simulated portfolio profit.
 
 <p align="center">
-  <img src="docs/images/streamlit_dashboard_business.png" width="100%" alt="Streamlit business-policy dashboard showing churn probabilities, retention actions and minimum-profit threshold sensitivity">
+  <img src="docs/images/classification-churn-probability-distribution-retention-actions.png" width="100%" alt="Local churn probability distribution and retention actions">
+</p>
+
+<p align="center">
+  <img src="docs/images/classification-business-policy-analysis.png" width="100%" alt="Offline retention policy and uplift sensitivity analysis">
 </p>
 
 > Business outcomes are simulated using configured customer values,
@@ -372,6 +352,9 @@ changes both the selected action volume and the simulated portfolio profit.
 > a real retention campaign.
 
 ### API and SLO monitoring
+
+The Grafana evidence below comes from the local Docker Compose monitoring stack.
+Terraform does not deploy Prometheus, Grafana or Streamlit to Google Cloud.
 
 - serving readiness
 - request throughput
@@ -386,7 +369,11 @@ Slack. Grafana provides the operational SLO view independently from the
 model- and business-monitoring dashboard.
 
 <p align="center">
-  <img src="docs/images/grafana_dashboard_slo.png" width="100%" alt="Grafana dashboard showing API availability, latency, error rate and serving readiness">
+  <img src="docs/images/classification-grafana-slo-overview.png" width="100%" alt="Local Grafana API SLO overview">
+</p>
+
+<p align="center">
+  <img src="docs/images/classification-grafana-prediction-overview.png" width="100%" alt="Local Grafana prediction traffic and latency">
 </p>
 
 ---
@@ -446,14 +433,10 @@ a controlled synthetic target shift to a documented customer cohort. Every
 modified label is recorded in a separate audit artifact, and both experiment
 branches use the same customer sequence and effective labels.
 
-Across the 28-day simulation:
-
-- 83 target labels were changed by the controlled drift process
-- 4 retraining runs were executed
-- 2 candidates passed the promotion policy
-- post-shift mean rolling F1 increased from `0.564` to `0.579`
-- final simulated realized profit increased from `€32,132` to `€32,216`
-- the adaptive branch produced a cumulative simulated profit uplift of `€84`
+The comparison figure reports the static and adaptive branches, retraining
+events and cumulative simulated profit difference. Use the matching archived
+summary and audit files under `results/churn_retraining_comparison/` as the
+authoritative source for run-specific counts and metrics.
 
 <p align="center">
   <img src="docs/images/churn_concept_drift_comparison.png" width="100%" alt="Controlled concept drift comparison with and without adaptive retraining">
@@ -470,10 +453,9 @@ The complementary cohort-shift experiment changes only the composition of
 incoming customers. It uses real Telco customer features and labels without
 synthetic feature or target values.
 
-Monitoring executed two retraining runs, but neither candidate passed the
-promotion policy. The active Champion therefore remained unchanged, and the
-static and retraining-enabled branches produced identical model performance
-and business results.
+This experiment tests whether a composition shift justifies promotion.
+Training can complete without replacing the Champion; the comparison figure
+and its archived summary show the outcome for the captured run.
 
 <p align="center">
   <img src="docs/images/churn_cohort_shift_comparison.png" width="100%" alt="Controlled customer-cohort shift retraining policy evaluation">
@@ -510,20 +492,49 @@ Cloud deployment is started manually through `deploy.yml`. The workflow uses
 Workload Identity Federation for keyless Google Cloud authentication and
 Terraform for infrastructure changes.
 
-Every deployment:
+The workflow plans foundational resources first. With `apply_changes=true`,
+it provisions Cloud SQL, service identities and storage, configures database
+credentials, publishes API and MLflow images tagged with the Git commit SHA,
+then plans and applies both Cloud Run services. A planning-only run does not
+apply infrastructure or publish container images.
 
-1. initializes the environment-specific remote Terraform state;
-2. plans the foundational Google Cloud infrastructure;
-3. builds and publishes an immutable API image tagged with the Git commit SHA;
-4. produces a human-readable Cloud Run deployment plan;
-5. applies that plan only when `apply_changes=true`.
+Continuous verification and security scans run independently of deployment:
 
-Cloud Run revision rollback is handled separately through `rollback.yml`.
+<p align="center">
+  <img src="docs/images/classification-github-actions-ci.png" width="100%" alt="Successful lint, test and API smoke-test workflow">
+</p>
 
-MLflow is treated as an independently operated platform dependency rather than
-being provisioned by this repository. A production deployment must configure
-`MLFLOW_TRACKING_URI` with the URL of a persistent MLflow service backed by a
-production-appropriate metadata database and artifact store.
+<p align="center">
+  <img src="docs/images/classification-github-actions-security.png" width="100%" alt="Successful repository, dependency and API image security scans">
+</p>
+
+Cloud deployment and traffic rollback have separate evidence:
+
+<p align="center">
+  <img src="docs/images/classification-cloud-run-service.png" width="100%" alt="Verified demo API and private MLflow Cloud Run services">
+</p>
+
+<p align="center">
+  <img src="docs/images/classification-cloud-run-deployment.png" width="100%" alt="Cloud Run API revision receiving deployment traffic">
+</p>
+
+<p align="center">
+  <img src="docs/images/classification-github-actions-rollback.png" width="100%" alt="Successful Cloud Run rollback with explicit revision, traffic and readiness">
+</p>
+
+<p align="center">
+  <img src="docs/images/classification-cloud-run-rollback.png" width="100%" alt="Cloud Run traffic directed to the previous API revision">
+</p>
+
+`rollback.yml` changes the application revision receiving traffic. A model
+rollback changes the active serving-release pointer; these operations are
+independent. After the recorded revision rollback, production verification
+confirmed readiness, model lineage and a working prediction probe.
+
+<p align="center">
+  <img src="docs/images/classification-production-verification.png" width="100%" alt="Production semantic verification with release, model version and prediction probe">
+</p>
+
 
 See [Google Cloud deployment](docs/cloud-deployment.md) for bootstrap,
 configuration, deployment, verification, rollback and teardown instructions.
@@ -560,7 +571,7 @@ configuration, deployment, verification, rollback and teardown instructions.
 
 - Docker and Docker Compose
 - PostgreSQL for the local MLflow stack
-- externally operated persistent MLflow platform
+- private MLflow on Cloud Run with Cloud SQL PostgreSQL and GCS artifacts
 - Google Secret Manager
 - Prometheus
 - Grafana
@@ -586,14 +597,15 @@ configuration, deployment, verification, rollback and teardown instructions.
 ├── infrastructure/          # Terraform configuration
 ├── monitoring/              # Prometheus, Alertmanager and Grafana configuration
 ├── scripts/                 # demos, verification and operational helpers
+├── plugins/                 # renewable Cloud Run authentication for MLflow
 ├── src/
-│   ├── api/                 # FastAPI contracts and endpoints
-│   ├── data/                # validation, features and versioning
-│   ├── deployment/          # cloud deployment helpers
-│   ├── inference/           # model loading, decisions and serving releases
-│   ├── monitoring/          # ML, business and service monitoring
-│   ├── storage/             # filesystem and cloud storage abstractions
-│   └── training/            # training, evaluation and registration
+│   └── mlops_churn_prediction/
+│       ├── api/             # FastAPI contracts and endpoints
+│       ├── data/            # validation, features and versioning
+│       ├── inference/       # model loading, decisions and serving releases
+│       ├── monitoring/      # ML, business and service monitoring
+│       ├── storage/         # filesystem and cloud storage abstractions
+│       └── training/        # training, evaluation and registration
 ├── tests/                   # unit and integration tests
 ├── docker-compose.yml
 ├── Makefile
@@ -634,11 +646,11 @@ make wait-prefect
 
 | Service | URL |
 |---|---|
-| Forecasting API | http://localhost:8000 |
+| Churn API | http://localhost:8000 |
 | Swagger UI | http://localhost:8000/docs |
 | Streamlit | http://localhost:8501 |
 | MLflow | http://localhost:5000 |
-| Prefect | http://localhost:4221 |
+| Prefect | http://localhost:4200 |
 | Grafana | http://localhost:3000 |
 | Prometheus | http://localhost:9090 |
 | Alertmanager | http://localhost:9093 |
@@ -721,7 +733,7 @@ The demo simulates prediction batches, delayed labels, monitoring refreshes and 
 Controlled retraining experiments can be reproduced separately:
 
 ```bash
-make churn-cohort-shift-comparison
+make churn-retraining-comparison
 make churn-cohort-shift-comparison-plot
 
 make churn-concept-drift-comparison
@@ -738,15 +750,13 @@ environment infrastructure:
 
 - `infrastructure/terraform-bootstrap` creates the protected Terraform state
   bucket and GitHub Workload Identity Federation resources;
-- `infrastructure/terraform` provisions Artifact Registry, GCS, Secret Manager
-  and the Cloud Run prediction API.
+- `infrastructure/terraform` provisions Artifact Registry, GCS, Secret Manager,
+  Cloud SQL, runtime identities and the API and private MLflow Cloud Run services.
 
-The deployed prediction API loads a portable serving release from the
-environment-specific GCS artifact bucket and does not require runtime access to
-MLflow. Training and release export may use an externally operated persistent
-MLflow service through `MLFLOW_TRACKING_URI`. The MLflow platform owner remains
-responsible for its metadata database, artifact store, credentials, backups and
-recovery process.
+The prediction API reads the active serving manifest and schema from GCS and
+loads its exact numeric model version through MLflow. It uses authenticated
+MLflow access at startup and reload, then serves predictions from the loaded
+in-memory bundle.
 
 Complete bootstrap, GitHub Environment and manual deployment instructions are
 documented in
@@ -762,25 +772,24 @@ Validate both Terraform modules locally:
 make terraform-validate
 ```
 
-After deployment, obtain the API URL and verify its probes:
+After deployment, update `.env` with the actual service URLs, artifact bucket,
+Cloud SQL instance and training service account. Bootstrap an empty production
+registry and verify the complete serving path:
 
 ```bash
-API_URL="$(
-  terraform \
-    -chdir=infrastructure/terraform \
-    output \
-    -raw cloud_run_service_uri
-)"
-
-curl -fsS "$API_URL/livez" | jq .
-curl -fsS "$API_URL/readyz" | jq .
-curl -fsS "$API_URL/health" | jq .
+make prepare-mlflow-prod-demo
+make train-bootstrap-prod
+make verify-prod
+make predict-test-prod
 ```
 
-The production registry must already contain the model version referenced by
-the active serving release. `train-bootstrap-prod` is reserved for an empty
-external registry. Once a Champion exists, use the normal production training
-path.
+Once a Champion exists, use `make train-force-prod` for subsequent forced
+candidate training. Forced training still follows the promotion gates.
+
+The cloud demonstration was deployed and semantically verified on 6 October
+2026, including a successful API revision rollback. Application and bootstrap
+resources were subsequently destroyed. Screenshots are recorded evidence;
+the demonstrated endpoints are no longer live.
 
 ---
 
@@ -876,7 +885,7 @@ This repository is a production-oriented portfolio blueprint, not a fully manage
 For a regulated or large-scale deployment, further controls may include:
 
 - private networking and authenticated Cloud Run ingress
-- verified backup and disaster recovery for the external MLflow platform
+- tested restore procedures and disaster recovery for Cloud SQL and MLflow artifacts
 - centralized secret rotation
 - organization-wide audit logging
 - formal privacy and retention policies
@@ -884,11 +893,10 @@ For a regulated or large-scale deployment, further controls may include:
 - multi-region recovery objectives
 - staged traffic splitting or shadow deployment
 
-The current cloud setup intentionally favors a compact, reproducible API
-deployment while implementing the central safety patterns of a production ML
-lifecycle. Persistent experiment tracking and model-registry operation remain
-the responsibility of the external MLflow platform. The setup is not presented
-as a continuously operated enterprise platform.
+The cloud setup provides a reproducible API and persistent MLflow deployment.
+Configured database backups do not establish a tested recovery process. The
+recorded demonstration was torn down after verification and is not a
+continuously operated service.
 
 ---
 

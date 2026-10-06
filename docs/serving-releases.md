@@ -8,8 +8,8 @@ and lineage metadata.
 
 MLflow and the serving-release repository have separate responsibilities.
 MLflow stores training lineage and registered model versions. In production,
-it must be operated separately with a persistent metadata database and durable
-object storage. A serving release binds
+Terraform provisions its private Cloud Run service, persistent Cloud SQL
+metadata database and GCS artifact store. A serving release binds
 one exact numeric model version to the matching feature schema, decision
 threshold and semantic prediction probe.
 
@@ -24,20 +24,7 @@ release binds the required components into one immutable, validated unit.
 | `feature_schema.json` | Exact feature columns, order and dtypes expected by the model |
 | `prediction_probe.json` | Representative semantic verification request |
 
-<p align="center">
-  <img
-    src="images/gcs_serving_release_overview.png"
-    width="100%"
-    alt="Immutable churn serving release in Google Cloud Storage"
-  >
-</p>
 
-<p align="center">
-  <em>
-    Versioned GCS serving release containing the feature schema,
-    prediction probe and serving manifest.
-  </em>
-</p>
 
 The manifest records:
 
@@ -61,7 +48,7 @@ Candidate evaluation and production registration produce explicit MLflow run
 and model lineage. Only an accepted model is registered and assigned the
 production `champion` alias.
 
-The external MLflow service stores experiment, run, model-version and alias
+The private MLflow service stores experiment, run, model-version and alias
 metadata in its persistent database. Corresponding model artifacts must remain
 available through its configured durable artifact store.
 
@@ -70,31 +57,24 @@ for the release. Runtime loading therefore does not depend on later changes to
 the mutable `champion` alias.
 
 <p align="center">
-  <img
-    src="images/mlflow_models_overview.png"
-    width="100%"
-    alt="Production churn run linked to its registered model artifact"
-  >
+  <img src="images/classification-mlflow-model-registry.png" width="100%" alt="Local model registry and Champion alias">
 </p>
 
-<p align="center">
-  <em>
-    Accepted production churn run linked to the registered model version
-    referenced by the serving release.
-  </em>
-</p>
+This registry screenshot is from the local experiment stack. Production
+verification independently checks the model version referenced by the GCS
+serving manifest.
 
 ## Implementation Ownership
 
 | Module | Responsibility |
 |---|---|
-| `src/inference/releases/manifest.py` | Manifest and artifact-reference models |
-| `src/inference/releases/storage.py` | Release paths and storage operations |
-| `src/inference/releases/repository.py` | Manifest, release and active-pointer loading |
-| `src/inference/releases/publisher.py` | Complete publication and activation |
-| `src/inference/model_manager.py` | Model and release loading into a bundle |
-| `src/inference/serving_bundle.py` | Bundle contract and validation |
-| `src/api/app.py` | Process-local activation and administrative endpoints |
+| `src/mlops_churn_prediction/inference/releases/manifest.py` | Manifest and artifact-reference models |
+| `src/mlops_churn_prediction/inference/releases/storage.py` | Release paths and storage operations |
+| `src/mlops_churn_prediction/inference/releases/repository.py` | Manifest, release and active-pointer loading |
+| `src/mlops_churn_prediction/inference/releases/publisher.py` | Complete publication and activation |
+| `src/mlops_churn_prediction/inference/model_manager.py` | Model and release loading into a bundle |
+| `src/mlops_churn_prediction/inference/serving_bundle.py` | Bundle contract and validation |
+| `src/mlops_churn_prediction/api/app.py` | Process-local activation and administrative endpoints |
 | `flows/deployment_flow.py` | Reload, verification and rollback orchestration |
 
 ## Publication Flow
@@ -211,6 +191,22 @@ curl -fsS -X POST \
 For production, replace the base URL and use the production API key. Verify
 `/readyz`, `/health` and a prediction after activation.
 
+## Cloud Run Revision Rollback
+
+`rollback.yml` routes 100% of API traffic to a selected application revision
+and checks `/readyz`. It does not change the active GCS model-release pointer.
+Use `make verify-prod` afterwards to verify the release identity and semantic
+prediction path. The recorded rollback below succeeded on 6 October 2026;
+the demonstration infrastructure was later destroyed.
+
+<p align="center">
+  <img src="images/classification-github-actions-rollback.png" width="100%" alt="Cloud Run revision rollback with traffic and readiness verification">
+</p>
+
+<p align="center">
+  <img src="images/classification-production-verification.png" width="100%" alt="Production release and semantic prediction verification">
+</p>
+
 ## Immutability Rules
 
 - Never edit a published release in place.
@@ -242,4 +238,3 @@ Tests cover:
 - [Google Cloud deployment](cloud-deployment.md)
 - [Monitoring and SLOs](monitoring-and-slos.md)
 - [Operations runbook](operations-runbook.md)
-

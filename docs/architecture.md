@@ -32,9 +32,9 @@ flowchart TD
 | Data pipeline | Schema validation, preprocessing and feature construction | Validated data and feature tables |
 | Dataset versioning | Stable dataset identity and lineage metadata | Dataset snapshots and metadata |
 | Prefect | Training and retraining orchestration | Flow and task-run metadata |
-| MLflow | Experiments, metrics and registered model versions | Externally operated metadata database and artifact store |
+| MLflow | Experiments, metrics and registered model versions | Cloud SQL metadata and GCS model artifacts |
 | GCS | Datasets, serving artifacts and immutable serving releases | Versioned objects |
-| Secret Manager | Supplies the API key to Cloud Run | Versioned API credential |
+| Secret Manager | Supplies API and MLflow database credentials | Versioned secrets |
 | Serving release storage | Immutable manifests and inference artifacts | Versioned release directories and active pointer |
 | FastAPI | Request validation, inference and business decisions | Process-local active `ServingBundle` |
 | Prediction logger | Prediction, lineage and decision logging | Current log and date-partitioned history |
@@ -51,15 +51,15 @@ flowchart TD
 |---|---|---|
 | Flow orchestration | `flows/training_flow.py`, `flows/auto_retrain_flow.py` | Coordinate lifecycle steps |
 | Deployment orchestration | `flows/deployment_flow.py`, `flows/tasks/serving_tasks.py` | Publish, reload, verify and roll back releases |
-| HTTP transport | `src/api/app.py`, `src/api/schema.py` | Endpoints, authentication and response contracts |
-| API services | `src/api/services.py` | Shared pipeline invocation and business-result helpers |
-| Inference | `src/inference/pipeline.py`, `src/inference/adapters.py` | Feature alignment and model execution |
-| Decisioning | `src/inference/decision.py` | Retention action and expected-value policy |
-| Serving state | `src/inference/serving_bundle.py`, `src/inference/model_manager.py` | Load and validate one complete bundle |
-| Release lifecycle | `src/inference/releases/` | Manifests, storage, publication and active-pointer operations |
-| Training | `src/training/` | Training, evaluation, explainability and registration |
-| Monitoring | `src/monitoring/` | Data quality, drift, delayed labels, costs and retraining signals |
-| Storage | `src/storage/` | Local and cloud filesystem operations |
+| HTTP transport | `src/mlops_churn_prediction/api/app.py`, `src/mlops_churn_prediction/api/schema.py` | Endpoints, authentication and response contracts |
+| API services | `src/mlops_churn_prediction/api/services.py` | Shared pipeline invocation and business-result helpers |
+| Inference | `src/mlops_churn_prediction/inference/pipeline.py`, `src/mlops_churn_prediction/inference/adapters.py` | Feature alignment and model execution |
+| Decisioning | `src/mlops_churn_prediction/inference/decision.py` | Retention action and expected-value policy |
+| Serving state | `src/mlops_churn_prediction/inference/serving_bundle.py`, `src/mlops_churn_prediction/inference/model_manager.py` | Load and validate one complete bundle |
+| Release lifecycle | `src/mlops_churn_prediction/inference/releases/` | Manifests, storage, publication and active-pointer operations |
+| Training | `src/mlops_churn_prediction/training/` | Training, evaluation, explainability and registration |
+| Monitoring | `src/mlops_churn_prediction/monitoring/` | Data quality, drift, delayed labels, costs and retraining signals |
+| Storage | `src/mlops_churn_prediction/storage/` | Local and cloud filesystem operations |
 
 
 ## Training and Promotion Flow
@@ -141,24 +141,28 @@ directories hold data, models, monitoring output and serving releases.
 
 ### Google Cloud production
 
-This repository provisions and deploys the prediction API and its supporting
-Google Cloud resources:
+Terraform provisions the environment's API and MLflow platform:
 
-- Cloud Run for `churn-prediction-api`;
-- Artifact Registry for container images;
-- GCS for datasets, serving artifacts and immutable releases;
-- Secret Manager for the API key;
-- Terraform for infrastructure provisioning;
-- GitHub Actions with Workload Identity Federation for keyless deployment.
+- Cloud Run services named `mlops-churn-prediction-<environment>-api` and
+  `mlops-churn-prediction-<environment>-mlflow`;
+- Cloud SQL PostgreSQL for persistent MLflow metadata;
+- Artifact Registry for both container images;
+- GCS for datasets, release manifests, schemas and MLflow model artifacts;
+- Secret Manager for the API key and MLflow database password;
+- dedicated API, MLflow and training service accounts;
+- GitHub Actions with Workload Identity Federation.
 
-Production model loading depends on an externally operated persistent MLflow
-service configured through `MLFLOW_TRACKING_URI`. The owning platform is
-responsible for the MLflow service, its metadata database, artifact storage,
-backups, credentials and recovery procedures.
+MLflow is private. The API runtime and authorized training identity invoke it
+with renewable identity tokens. MLflow connects to Cloud SQL through the
+Cloud SQL connection and accesses its GCS artifacts using its runtime identity.
+The API needs MLflow during bundle loading, not for every prediction request.
 
-The API deployment does not provision or modify the external MLflow platform.
-A serving release references an immutable numeric MLflow model version and
-retains the corresponding run lineage.
+Prefect Cloud remains an external orchestration service. Streamlit, Prometheus,
+Grafana and Alertmanager screenshots show the local Compose stack; they are
+not provisioned by the cloud deployment module.
+
+The demonstrated cloud deployment was verified and torn down on 6 October
+2026. The screenshots document that run rather than a currently live service.
 
 ## Trust Boundaries
 
@@ -167,10 +171,11 @@ retains the corresponding run lineage.
 | Client to API | API key and Pydantic request validation |
 | GitHub Actions to GCP | Workload Identity Federation |
 | API/training process to GCS | Service account and bucket IAM |
-| API/training process to MLflow | Configured endpoint, credentials and network access |
+| API/training process to MLflow | Cloud Run invoker IAM and renewable identity tokens |
 | Release activation | Manifest validation, path containment and checksums |
 | Model replacement | Load-before-swap bundle activation |
-| Deployment completion | Readiness and semantic prediction verification |
+| Application deployment workflow | Cloud Run service readiness |
+| Serving release deployment | Readiness and semantic prediction verification |
 | Failed deployment | Active-pointer restoration and reload |
 
 ## Reusable and Domain-Specific Layers
@@ -191,4 +196,3 @@ from the reusable operational architecture.
 - [Retraining policy](retraining-policy.md)
 - [Monitoring and SLOs](monitoring-and-slos.md)
 - [Operations runbook](operations-runbook.md)
-

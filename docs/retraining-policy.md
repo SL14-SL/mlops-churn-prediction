@@ -196,7 +196,7 @@ between branches come from the retraining policy rather than different input
 data.
 
 ```bash
-make churn-cohort-shift-comparison
+make churn-retraining-comparison
 make churn-cohort-shift-comparison-plot
 
 make churn-concept-drift-comparison
@@ -205,6 +205,11 @@ make churn-concept-drift-comparison-plot
 Artifacts are written below:
 `results/churn_retraining_comparison/`
 
+
+Business-value metrics in these experiments use configured costs and assumed
+intervention uplift. They are simulated policy outcomes rather than measured
+causal retention effects. Use the archived summary for the exact run shown in
+the comparison figure.
 
 ## Running the Policy
 
@@ -240,4 +245,3 @@ decisions while preserving prediction and model lineage.
 - [Local development](local-development.md)
 - [Serving releases](serving-releases.md)
 - [Monitoring and SLOs](monitoring-and-slos.md)
-

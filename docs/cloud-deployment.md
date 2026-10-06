@@ -1,575 +1,330 @@
-# Google Cloud deployment
+# Google Cloud Deployment
 
-This document describes the initial Google Cloud bootstrap and the
-subsequent GitHub Actions deployment of **Customer Churn Prediction**.
+This guide covers Terraform bootstrap, GitHub Actions deployment, authenticated
+MLflow access, production model bootstrap, verification and revision rollback.
+The demonstrated production deployment was verified on 6 October 2026 and then
+fully torn down. Screenshots document that run; the pictured URLs are not live.
 
-## Architecture
+## Managed Architecture
 
-The deployment uses:
+| Resource | Role |
+|---|---|
+| Bootstrap GCS bucket | Versioned remote Terraform state |
+| Workload Identity Federation | Keyless GitHub Actions authentication |
+| Artifact Registry | API and MLflow images tagged with the Git SHA |
+| Cloud Run API | Churn inference and retention decisions |
+| Private Cloud Run MLflow | Experiment tracking and model registry |
+| Cloud SQL PostgreSQL | Persistent MLflow metadata |
+| GCS artifact bucket | Datasets, releases, schemas and MLflow artifacts |
+| Secret Manager | API key and MLflow database password |
+| Dedicated service accounts | API, MLflow, training and deployment identities |
 
-- Google Cloud Storage for Terraform remote state
-- Workload Identity Federation for keyless GitHub authentication
-- Artifact Registry for container images
-- Secret Manager for the API key
-- Cloud Run for the serving API
-- a dedicated runtime service account
-- GitHub Environments for deployment-specific secrets
+The API loads the active serving manifest from GCS and the exact numeric model
+version from MLflow during startup or reload. Predictions use the loaded
+in-memory bundle. This is not a portable model export that eliminates the
+runtime MLflow dependency.
 
-No long-lived Google service-account key is stored in GitHub.
+MLflow is private even when the demonstration API permits unauthenticated
+network access. Authorized API and training identities use the
+`mlflow-cloud-run-auth` plugin to obtain renewable identity tokens. MLflow uses
+its service account to access GCS and connects to PostgreSQL through the Cloud
+SQL connection. Prefect Cloud remains an external orchestration service.
+
+Streamlit, Prometheus, Grafana and Alertmanager run in the local Compose stack;
+the current Terraform deployment does not provision those dashboards in GCP.
+
+<p align="center">
+  <img src="images/classification-cloud-run-service.png" width="100%" alt="Verified demo API and private MLflow Cloud Run services">
+</p>
 
 ## Prerequisites
 
-Install and configure:
-
-- Google Cloud CLI
-- Terraform
-- Docker
-- GitHub CLI
-
-A Google Cloud project with billing enabled is required.
-
-Authenticate locally:
+Install Google Cloud CLI, Terraform, Docker, GitHub CLI, Python 3.12 and `uv`.
+Use a billing-enabled Google Cloud project and the existing project repository.
 
 ```bash
 gcloud auth login
 gcloud auth application-default login
+uv sync --frozen
+
+gcloud config set project YOUR_GCP_PROJECT_ID
 ```
 
-Select the project:
+The operator needs permissions to provision resources, configure IAM and
+impersonate the training identity. Keep local Terraform state, `.env` and
+`terraform.tfvars` outside version control.
+
+## Bootstrap State and GitHub Authentication
 
 ```bash
-gcloud config set project GCP_PROJECT_ID
-```
-
-## Create the GitHub repository
-
-Create the repository before enabling Workload Identity Federation,
-because the identity provider is restricted to one exact repository.
-
-From the generated project root:
-
-```bash
-gh repo create \
-  mlops-churn-prediction \
-  --private \
-  --source=. \
-  --remote=origin \
-  --push
-```
-
-The repository can be made public later without changing the workload
-identity configuration.
-
-## Bootstrap Terraform state and GitHub authentication
-
-Create the local bootstrap configuration:
-
-```bash
-cp \
-  infrastructure/terraform-bootstrap/terraform.tfvars.example \
+cp infrastructure/terraform-bootstrap/terraform.tfvars.example \
   infrastructure/terraform-bootstrap/terraform.tfvars
 ```
 
-Edit `infrastructure/terraform-bootstrap/terraform.tfvars`:
+Set the actual project and exact repository in that file:
 
 ```hcl
-gcp_project_id  = "your-gcp-project-id"
+gcp_project_id   = "your-gcp-project-id"
 storage_location = "EU"
-
 enable_github_actions = true
-
 github_repository_owner = "your-github-owner"
 github_repository_name  = "mlops-churn-prediction"
 ```
 
-Initialize the bootstrap module:
-
 ```bash
-terraform \
-  -chdir=infrastructure/terraform-bootstrap \
-  init
+terraform -chdir=infrastructure/terraform-bootstrap init
+terraform -chdir=infrastructure/terraform-bootstrap plan
+terraform -chdir=infrastructure/terraform-bootstrap apply
+terraform -chdir=infrastructure/terraform-bootstrap output
 ```
 
-Review the plan:
+Bootstrap uses local Terraform state. Retain it for future updates and teardown.
+It creates the protected state bucket, deployment identity, Workload Identity
+Pool/provider and IAM bindings. The application module uses GCS state with
+prefix `mlops-churn-prediction/<environment>` and the default workspace.
+
+## Configure GitHub Variables and Secrets
+
+Read the bootstrap outputs:
 
 ```bash
-terraform \
-  -chdir=infrastructure/terraform-bootstrap \
-  plan
+TF_STATE_BUCKET="$(terraform -chdir=infrastructure/terraform-bootstrap output -raw terraform_state_bucket)"
+WIF_PROVIDER="$(terraform -chdir=infrastructure/terraform-bootstrap output -raw github_workload_identity_provider)"
+DEPLOY_SERVICE_ACCOUNT="$(terraform -chdir=infrastructure/terraform-bootstrap output -raw github_deployer_service_account)"
+
+gh variable set GCP_PROJECT_ID --body "your-gcp-project-id"
+gh variable set GCP_REGION --body "europe-west1"
+gh variable set ARTIFACT_REGISTRY_REPOSITORY --body "mlops-churn-prediction-images"
+gh variable set GCP_WORKLOAD_IDENTITY_PROVIDER --body "$WIF_PROVIDER"
+gh variable set GCP_DEPLOY_SERVICE_ACCOUNT --body "$DEPLOY_SERVICE_ACCOUNT"
+gh variable set TF_STATE_BUCKET --body "$TF_STATE_BUCKET"
+gh variable set GCS_STORAGE_LOCATION --body "EU"
+gh variable set ALLOW_UNAUTHENTICATED --body "false"
 ```
 
-Apply it:
-
-```bash
-terraform \
-  -chdir=infrastructure/terraform-bootstrap \
-  apply
-```
-
-The bootstrap creates:
-
-- the protected Terraform state bucket
-- a GitHub Workload Identity Pool
-- an OIDC provider restricted to this repository
-- a GitHub deployment service account
-- the required IAM bindings
-
-Display the outputs:
-
-```bash
-terraform \
-  -chdir=infrastructure/terraform-bootstrap \
-  output
-```
-
-## Configure GitHub repository variables
-
-Read the Bootstrap outputs:
-
-```bash
-TF_STATE_BUCKET="$(
-  terraform \
-    -chdir=infrastructure/terraform-bootstrap \
-    output \
-    -raw \
-    terraform_state_bucket
-)"
-
-WIF_PROVIDER="$(
-  terraform \
-    -chdir=infrastructure/terraform-bootstrap \
-    output \
-    -raw \
-    github_workload_identity_provider
-)"
-
-DEPLOY_SERVICE_ACCOUNT="$(
-  terraform \
-    -chdir=infrastructure/terraform-bootstrap \
-    output \
-    -raw \
-    github_deployer_service_account
-)"
-```
-
-Configure the required repository variables:
-
-```bash
-gh variable set \
-  GCP_PROJECT_ID \
-  --body "your-gcp-project-id"
-
-gh variable set \
-  GCP_REGION \
-  --body "europe-west1"
-
-gh variable set \
-  ARTIFACT_REGISTRY_REPOSITORY \
-  --body "mlops-churn-prediction-images"
-
-gh variable set \
-  GCP_WORKLOAD_IDENTITY_PROVIDER \
-  --body "$WIF_PROVIDER"
-
-gh variable set \
-  GCP_DEPLOY_SERVICE_ACCOUNT \
-  --body "$DEPLOY_SERVICE_ACCOUNT"
-
-gh variable set \
-  TF_STATE_BUCKET \
-  --body "$TF_STATE_BUCKET"
-
-gh variable set \
-  GCS_STORAGE_LOCATION \
-  --body "EU"
-
-gh variable set \
-  ALLOW_UNAUTHENTICATED \
-  --body "false"
-```
-
-Optional external service URLs can also be configured:
-
-```bash
-gh variable set \
-  MLFLOW_TRACKING_URI \
-  --body "https://mlflow.example.com"
-
-gh variable set \
-  PREFECT_API_URL \
-  --body "https://prefect.example.com/api"
-```
-
-Leave them unset while these external services are not available.
-
-An optional explicit Cloud Run service name can be configured:
-
-```bash
-gh variable set \
-  CLOUD_RUN_SERVICE_NAME \
-  --body "mlops-churn-prediction-dev-api" \
-  --env dev
-```
-
-If it is omitted, the rollback workflow derives the service name from
-the GitHub repository name and deployment environment.
-
-## Configure GitHub Environments
-
-Create the deployment environments:
+Create deployment environments:
 
 ```bash
 for environment in dev staging prod; do
-  gh api \
-    --method PUT \
-    "repos/{owner}/{repo}/environments/${environment}"
+  gh api --method PUT "repos/{owner}/{repo}/environments/${environment}"
 done
 ```
 
-Add the API key separately to each environment. The command prompts
-for the secret value without writing it to the repository:
+For the environment being deployed, configure its secrets using interactive
+prompts:
 
 ```bash
-gh secret set API_KEY --env dev
-gh secret set API_KEY --env staging
 gh secret set API_KEY --env prod
+gh secret set MLFLOW_DATABASE_PASSWORD --env prod
 ```
 
-Use different keys for the three environments.
+Use a strong database password and retain the same value for later deployments;
+the workflow configures the database user and publishes its Secret Manager
+version. Do not casually replace it while MLflow instances use the old value.
 
-For `prod`, configure required reviewers through:
-
-```text
-GitHub repository
-→ Settings
-→ Environments
-→ prod
-→ Required reviewers
-```
-
-## Plan the deployment
-
-The first workflow run prepares the foundational infrastructure,
-publishes an immutable container image and creates a Cloud Run
-deployment plan. It does not update the live Cloud Run service.
-
-Start a development plan:
+Set `TRAINING_OPERATOR_EMAIL` to the operator permitted to impersonate the
+training service account, and configure the Prefect Cloud API URL:
 
 ```bash
-gh workflow run \
-  deploy.yml \
-  --field environment=dev \
-  --field apply_changes=false
+gh variable set TRAINING_OPERATOR_EMAIL --env prod --body "your-operator@example.com"
+gh variable set PREFECT_API_URL --env prod --body "https://api.prefect.cloud/api/accounts/ACCOUNT_ID/workspaces/WORKSPACE_ID"
 ```
 
-Watch the workflow:
+The Terraform-managed MLflow service supplies the API's tracking endpoint. An
+external `MLFLOW_TRACKING_URI` is not required for the demonstrated managed
+setup. Production training uses the Prefect API key from local `.env`.
+
+An optional `CLOUD_RUN_SERVICE_NAME` override must match the API service used by
+`rollback.yml`. Otherwise the workflow derives
+`mlops-churn-prediction-<environment>-api` from the repository name.
+
+## Plan Without Applying
+
+Commit and push the intended source before starting a workflow; it checks out
+the selected Git revision, not uncommitted local files.
 
 ```bash
-gh run watch
+gh workflow run deploy.yml --field environment=prod --field apply_changes=false
+gh run list --workflow deploy.yml --limit 5
+gh run watch RUN_ID
+
+gh run download RUN_ID --pattern 'terraform-plan-prod-*' --dir /tmp/churn-prod-plan
+find /tmp/churn-prod-plan -type f -name 'deployment-plan.txt' \
+  -exec grep -nE 'will be created|will be updated|must be replaced|will be destroyed|Plan:' {} +
 ```
 
-The workflow uploads the human-readable Terraform plan as a workflow
-artifact. Find the completed run:
+The downloaded artifact contains a nested directory. Review the complete plan,
+including IAM, SQL settings and service configuration. Planning-only runs do
+not apply foundational infrastructure, configure secrets or publish images.
+The apply run creates a fresh plan for the same selected source revision.
+
+## Apply the Deployment
 
 ```bash
-gh run list \
-  --workflow deploy.yml \
-  --limit 5
+gh workflow run deploy.yml --field environment=prod --field apply_changes=true
+gh run list --workflow deploy.yml --limit 5
+gh run watch RUN_ID
 ```
 
-Download the plan using its run ID:
+With changes enabled, the workflow:
+
+1. initializes the environment's remote state and validates Terraform;
+2. plans and applies foundational resources, including Cloud SQL;
+3. configures the MLflow database user and publishes database/API secrets;
+4. builds and pushes API and MLflow images tagged with the Git commit SHA;
+5. creates and uploads a readable Cloud Run plan;
+6. rejects destructive Cloud Run changes;
+7. applies the reviewed-in-run plan and checks Cloud Run service readiness.
+
+GitHub Environment reviewers can be configured as an additional deployment
+approval step where supported. The workflow summary records the resulting
+service and image information.
+
+Cloud Run service readiness alone does not prove that a model bundle can serve
+predictions. An empty production registry still needs the model bootstrap and
+semantic verification below.
+
+<p align="center">
+  <img src="images/classification-cloud-run-deployment.png" width="100%" alt="API deployment revision receiving Cloud Run traffic">
+</p>
+
+## Resolve Actual Resource Names
+
+Do not reuse the URLs or bucket names from an earlier deployment. Inspect the
+current environment:
 
 ```bash
-gh run download \
-  RUN_ID \
-  --pattern "terraform-plan-dev-*"
+gcloud run services list --project YOUR_GCP_PROJECT_ID --region europe-west1 \
+  --format='table(metadata.name,status.url)'
+gcloud sql instances list --project YOUR_GCP_PROJECT_ID
+gcloud storage buckets list --project YOUR_GCP_PROJECT_ID --format='table(name)'
 ```
 
-Review `deployment-plan.txt` before requesting the apply.
+For the recorded production demo, the resources were:
 
-The planning run is read-only. It previews the foundational resources
-and the Cloud Run deployment without applying infrastructure changes,
-building an image or changing the live Cloud Run revision.
+| Resource | Recorded name |
+|---|---|
+| API | `mlops-churn-prediction-prod-api` |
+| MLflow | `mlops-churn-prediction-prod-mlflow` |
+| Cloud SQL | `mlops-churn-prediction-prod-mlflow-db` |
+| Artifact bucket | `mlops-churn-495606-mlops-churn-prediction-prod-artifacts` |
+| State bucket | `mlops-churn-495606-mlops-churn-prediction-tfstate` |
 
-## Apply the deployment
+These resources were subsequently destroyed.
 
-After reviewing the plan, start a second workflow run:
+## Configure Local Production Commands
+
+Update the ignored `.env` using the actual deployment values:
+
+```dotenv
+GCP_PROJECT_ID=your-gcp-project-id
+GCP_REGION=europe-west1
+GCP_BUCKET_NAME=your-environment-artifact-bucket
+MLFLOW_DATABASE_INSTANCE=your-cloud-sql-instance
+MLFLOW_UI_URL=https://your-mlflow-service.run.app
+PREDICTION_API_URL=https://your-api-service.run.app/predict
+PROD_TRAINING_SERVICE_ACCOUNT=your-training-service-account@your-gcp-project-id.iam.gserviceaccount.com
+PREFECT_API_URL=https://api.prefect.cloud/api/accounts/ACCOUNT_ID/workspaces/WORKSPACE_ID
+```
+
+Also set `API_KEY` and `PREFECT_API_KEY` without committing their values.
+Production Make targets select `MLFLOW_TRACKING_AUTH=cloud_run`, the MLflow URL
+as token audience, and the training impersonation identity. Keep those auth
+settings scoped to production commands so local MLflow remains accessible.
 
 ```bash
-gh workflow run \
-  deploy.yml \
-  --field environment=dev \
-  --field apply_changes=true
+make debug-prod-env
+make check-prod-env
+make prepare-mlflow-prod-demo
 ```
 
-The apply run:
+`prepare-mlflow-prod-demo` starts Cloud SQL and uses
+`scripts/wait_for_production_mlflow.py` for an authenticated health check.
+Allow time for database startup and the MLflow cold start. The plugin must be
+installed through the project's `uv` environment; raw unauthenticated `curl`
+to private MLflow is not a useful health check.
 
-1. refreshes the foundational infrastructure;
-2. builds and publishes an immutable container image;
-3. creates a fresh Terraform deployment plan;
-4. applies that exact plan;
-5. verifies that Cloud Run reports a ready service.
+## Bootstrap and Verify the Production Model
 
-Watch its progress:
+Place `Telco-Customer-Churn.csv` under `data/raw/`, then run:
 
 ```bash
-gh run watch
+make train-bootstrap-prod
+make verify-prod
+make predict-test-prod
 ```
 
-For `prod`, configure required reviewers in the GitHub `prod`
-environment. The apply workflow cannot begin before approval.
-
-The deployment summary contains the image URI, service name and
-Cloud Run URI.
-
-
-## Publish a portable serving release
-
-The Cloud Run service reads its active serving release from the
-environment-specific Google Cloud Storage artifact bucket. It does not
-require access to a local MLflow server at runtime.
-
-Before exporting, the local environment must contain:
-
-- an active serving-release pointer;
-- all task-specific release artifacts;
-- access to the MLflow model referenced by the active manifest;
-- Google Cloud credentials with write access to the artifact bucket.
-
-Set the project and target bucket:
+The bootstrap uploads raw data, trains and registers the first Champion,
+publishes a serving release, reloads the API and verifies serving. Use it only
+for an empty production registry. Later forced training uses:
 
 ```bash
-GCP_PROJECT_ID="your-gcp-project-id"
-DEPLOYMENT_ENVIRONMENT="dev"
-
-TARGET_MODELS_PATH="gs://${GCP_PROJECT_ID}-${DEPLOYMENT_ENVIRONMENT}-artifacts/models"
+make train-force-prod
 ```
 
-Export the locally active release:
+A forced run does not bypass promotion gates. Verification checks liveness,
+readiness, the active GCS release pointer, numeric model version, run ID and a
+semantic prediction probe. The sample prediction additionally exercises the
+application API key and retention decision output.
+
+<p align="center">
+  <img src="images/classification-production-verification.png" width="100%" alt="Successful production serving lineage and semantic prediction verification">
+</p>
+
+## Access and Monitoring Boundaries
+
+`ALLOW_UNAUTHENTICATED=false` requires Cloud Run IAM authentication. Inference
+and administrative routes also enforce the application API key. For a public
+portfolio demonstration, `ALLOW_UNAUTHENTICATED=true` permits network access
+to the API while preserving application-key checks. It does not make MLflow
+public. The recorded demo used public network access to the API.
+
+The production Swagger UI is available at the deployed API's `/docs` route.
+API production predictions are emitted as structured cloud logs; local Parquet
+dashboard screenshots do not establish cloud-hosted monitoring coverage.
+
+## Roll Back or Restore an API Revision
+
+Record the current traffic and choose an explicit known-good revision:
 
 ```bash
-uv run python \
-  scripts/export_serving_release_to_cloud.py \
-  --source-models-path artifacts/models \
-  --target-models-path "$TARGET_MODELS_PATH" \
-  --mlflow-tracking-uri http://127.0.0.1:5000
+gcloud run revisions list --service mlops-churn-prediction-prod-api \
+  --project YOUR_GCP_PROJECT_ID --region europe-west1
+
+gh workflow run rollback.yml --field environment=prod --field revision=REVISION_NAME
+gh run list --workflow rollback.yml --limit 5
+gh run watch RUN_ID
+make verify-prod
+make predict-test-prod
 ```
 
-The exporter:
+The workflow verifies the revision, directs 100% of traffic to it, confirms the
+traffic assignment and checks `/readyz`. Omit `revision` only when the
+second-newest revision is the intended target; repeated use of the default does
+not necessarily toggle between the two traffic states.
 
-1. loads the locally active serving-release manifest;
-2. downloads and materializes the referenced MLflow model;
-3. copies all task-specific serving artifacts;
-4. writes and validates the portable release manifest;
-5. updates `active_serving_release.json` only after the complete release
-   has been published successfully.
+<p align="center">
+  <img src="images/classification-github-actions-rollback.png" width="100%" alt="Successful revision rollback with 100 percent traffic and readiness">
+</p>
 
-The resulting layout is:
+<p align="center">
+  <img src="images/classification-cloud-run-rollback.png" width="100%" alt="Cloud Run traffic assigned to the previous API revision">
+</p>
 
-```text
-gs://PROJECT_ID-ENVIRONMENT-artifacts/models/
-├── active_serving_release.json
-└── serving_releases/
-    └── RELEASE_ID/
-        ├── model/
-        ├── serving_manifest.json
-        └── task-specific serving artifacts
-```
+Restore a newer known-good revision through the same workflow with its explicit
+revision name. A Cloud Run rollback changes application traffic, not the GCS
+active model-release pointer. Use the serving-release operation documented in
+[serving-releases.md](serving-releases.md) for a model rollback.
 
-The pointer-last publication order prevents the API from observing a
-partially uploaded serving release.
+## Continuous Verification
 
+`main.yml` runs linting, tests and an API smoke test. `security.yml` audits
+Python dependencies and scans repository configuration and the API image.
+`terraform.yml` validates formatting and both Terraform modules. These
+workflows are separate from the manually invoked deployment and rollback jobs.
 
-## Verify the deployment
+## Teardown
 
-Obtain the Cloud Run URI:
-
-```bash
-SERVICE_URI="$(
-  gcloud run services describe \
-    "mlops-churn-prediction-dev-api" \
-    --region "europe-west1" \
-    --format "value(status.url)"
-)"
-```
-
-For an IAM-protected service:
-
-```bash
-IDENTITY_TOKEN="$(
-  gcloud auth print-identity-token
-)"
-
-curl \
-  --include \
-  --header "Authorization: Bearer ${IDENTITY_TOKEN}" \
-  "${SERVICE_URI}/livez"
-```
-
-Expected response:
-
-```text
-HTTP/2 200
-```
-
-Load the newly published serving release without creating another
-Cloud Run revision:
-
-```bash
-read -r -s -p "API key: " API_KEY_VALUE
-echo
-
-curl \
-  --include \
-  --request POST \
-  --header "Authorization: Bearer ${IDENTITY_TOKEN}" \
-  --header "X-API-Key: ${API_KEY_VALUE}" \
-  "${SERVICE_URI}/admin/reload"
-```
-
-A successful response reports the newly active release ID. Verify
-application readiness afterwards:
-
-```bash
-curl \
-  --include \
-  --header "Authorization: Bearer ${IDENTITY_TOKEN}" \
-  "${SERVICE_URI}/readyz"
-```
-
-Expected response:
-
-```text
-HTTP/2 200
-```
-
-Readiness can return `503` until an active serving bundle exists:
-
-```bash
-curl \
-  --include \
-  --header "Authorization: Bearer ${IDENTITY_TOKEN}" \
-  "${SERVICE_URI}/readyz"
-```
-
-A prediction additionally requires the application API key:
-
-```bash
-
-curl \
-  --include \
-  --request POST \
-  --header "Authorization: Bearer ${IDENTITY_TOKEN}" \
-  --header "X-API-Key: ${API_KEY_VALUE}" \
-  --header "Content-Type: application/json" \
-  --data '{"inputs":[{}]}' \
-  "${SERVICE_URI}/predict"
-
-unset API_KEY_VALUE
-```
-
-The example payload must be replaced with the project's actual feature
-schema.
-
-## Public access
-
-The secure default is:
-
-```text
-ALLOW_UNAUTHENTICATED=false
-```
-
-This requires both Cloud Run IAM authentication and the application API
-key where applicable.
-
-For a public demonstration API, set:
-
-```bash
-gh variable set \
-  ALLOW_UNAUTHENTICATED \
-  --body "true"
-```
-
-The application API key still protects the prediction endpoint.
-
-Do not enable public access for sensitive customer workloads without a
-security review.
-
-## Updating the service
-
-Every manually started deployment builds an immutable image tagged with
-the Git commit SHA.
-
-After merging changes, first create and review a new deployment plan:
-
-```bash
-gh workflow run \
-  deploy.yml \
-  --field environment=dev \
-  --field apply_changes=false
-```
-
-After reviewing the plan, apply the update:
-
-```bash
-gh workflow run \
-  deploy.yml \
-  --field environment=dev \
-  --field apply_changes=true
-```
-
-Terraform updates Cloud Run to the immutable image produced by the
-apply run while preserving the existing infrastructure.
-
-
-## Rolling back Cloud Run
-
-The Cloud Run rollback changes application traffic without modifying
-the active model serving release.
-
-Roll back automatically to the second-newest revision:
-
-```bash
-gh workflow run \
-  rollback.yml \
-  --field environment=dev
-```
-
-Select a specific revision:
-
-```bash
-gcloud run revisions list \
-  --service "mlops-churn-prediction-dev-api" \
-  --region "europe-west1"
-```
-
-```bash
-gh workflow run \
-  rollback.yml \
-  --field environment=dev \
-  --field revision=REVISION_NAME
-```
-
-Watch the workflow:
-
-```bash
-gh run watch
-```
-
-For production, GitHub Environment reviewers should approve the
-rollback before the job starts.
-
-A Cloud Run rollback and a model rollback are separate operations:
-
-- use this workflow for broken application or container revisions;
-- use the serving-release rollback for a faulty model release.
-
-
-## Destroying an environment
-
-Application and bootstrap infrastructure must be destroyed in the
-correct order. The bootstrap state bucket is protected against
-accidental deletion.
-
-Follow the reviewed procedure in
-[cloud-teardown.md](cloud-teardown.md).
+Destroy the application resources before the bootstrap state bucket and WIF
+resources. Cloud SQL deletion protection and the protected state bucket require
+explicit handling. Follow [cloud-teardown.md](cloud-teardown.md).

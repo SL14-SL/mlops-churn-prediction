@@ -80,13 +80,16 @@ particularly in:
 - serving-release providers
 - feedback and drift adapters
 - project-specific configuration
+- private MLflow Cloud Run, Cloud SQL and Secret Manager resources
+- the renewable MLflow Cloud Run authentication plugin
+- API/MLflow image publication and production verification commands
 
 ## Validate the updated project
 
 Synchronize dependencies:
 
 ```bash
-make sync
+uv sync --frozen
 ```
 
 Run all code-quality and test checks:
@@ -98,12 +101,7 @@ make check
 Validate Docker Compose:
 
 ```bash
-docker compose \
-  --profile orchestration \
-  --profile tracking \
-  --profile monitoring \
-  config \
-  --quiet
+docker compose config --quiet
 ```
 
 Build the production image:
@@ -146,6 +144,14 @@ The pull request should document:
 - relevant dependency or infrastructure changes
 - completed validation steps
 - required deployment or migration actions
+
+## Cloud Extensions and Template Ownership
+
+The persistent MLflow deployment and authentication plugin were added to this
+project after the template baseline. Their presence here does not establish
+that the source template or forecasting project contains them. Review their
+Terraform resources, IAM bindings, Docker builds and workflow integration during
+each Copier update.
 
 ## Deploying the update
 
