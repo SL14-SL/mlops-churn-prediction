@@ -118,3 +118,15 @@ variable "deploy_cloud_run" {
   type        = bool
   default     = false
 }
+
+variable "deploy_mlflow" {
+  description = "Deploy MLflow after its image and database credentials exist."
+  type        = bool
+  default     = false
+}
+
+variable "mlflow_container_image" {
+  description = "Complete container image URI for the MLflow server."
+  type        = string
+  default     = ""
+}

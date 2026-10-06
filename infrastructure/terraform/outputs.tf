@@ -65,3 +65,11 @@ output "mlflow_database_password_secret_name" {
   description = "Secret containing the MLflow database password."
   value       = google_secret_manager_secret.mlflow_database_password.secret_id
 }
+
+output "mlflow_service_uri" {
+  description = "URI of the deployed MLflow server."
+  value = try(
+    google_cloud_run_v2_service.mlflow[0].uri,
+    null,
+  )
+}
