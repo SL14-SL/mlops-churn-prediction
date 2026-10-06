@@ -64,7 +64,7 @@ resource "google_cloud_run_v2_service" "api" {
 
       ports {
         name           = "http1"
-        container_port = 8000
+        container_port = 8080
       }
 
       resources {
@@ -104,7 +104,7 @@ resource "google_cloud_run_v2_service" "api" {
 
         http_get {
           path = "/livez"
-          port = 8000
+          port = 8080
         }
       }
 
@@ -116,7 +116,7 @@ resource "google_cloud_run_v2_service" "api" {
 
         http_get {
           path = "/livez"
-          port = 8000
+          port = 8080
         }
       }
     }
