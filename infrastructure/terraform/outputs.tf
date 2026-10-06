@@ -55,3 +55,13 @@ output "mlflow_database_connection_name" {
   description = "Cloud SQL connection name used by MLflow."
   value       = google_sql_database_instance.mlflow.connection_name
 }
+
+output "mlflow_service_account_email" {
+  description = "Service account used by the MLflow server."
+  value       = google_service_account.mlflow.email
+}
+
+output "mlflow_database_password_secret_name" {
+  description = "Secret containing the MLflow database password."
+  value       = google_secret_manager_secret.mlflow_database_password.secret_id
+}
