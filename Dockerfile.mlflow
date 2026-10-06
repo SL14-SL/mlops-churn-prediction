@@ -19,6 +19,7 @@ RUN python -m pip install \
         --no-cache-dir \
         "mlflow==3.16.1" \
         "psycopg2-binary>=2.9.10,<3" \
+        "google-cloud-storage>=2,<4" \
         "cryptography==49.0.0" \
         "msgpack==1.2.1"
 
@@ -44,11 +45,13 @@ RUN groupadd \
 USER mlflow
 EXPOSE 5000
 
-CMD ["sh", "-c", "if [ -n \"$CLOUD_SQL_CONNECTION_NAME\" ]; then \
+CMD ["sh", "-c", "set -eu; \
+if [ -n \"${CLOUD_SQL_CONNECTION_NAME:-}\" ]; then \
   BACKEND_STORE_URI=\"postgresql+psycopg2://${MLFLOW_DB_USER}:${MLFLOW_DB_PASSWORD}@/${MLFLOW_DB_NAME}?host=/cloudsql/${CLOUD_SQL_CONNECTION_NAME}\"; \
 else \
   BACKEND_STORE_URI=\"$MLFLOW_BACKEND_STORE_URI\"; \
 fi; \
+mlflow db upgrade \"$BACKEND_STORE_URI\"; \
 exec mlflow server \
   --host 0.0.0.0 \
   --port ${PORT:-5000} \
