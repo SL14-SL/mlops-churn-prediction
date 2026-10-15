@@ -74,6 +74,9 @@ jobs:
       - name: Install Dependencies
         run: uv sync --frozen
 
+      - name: Check persisted model compatibility
+        run: uv run --no-sync python scripts/check_model_compatibility.py
+
       - name: Run Tests
         run: |
           unset PREFECT_API_URL
@@ -105,6 +108,16 @@ jobs:
 
       - name: Build API image
         run: docker build -t churn-api:smoke .
+
+      - name: Check persisted model inside API image
+        run: |
+          docker run --rm \
+            --entrypoint /app/.venv/bin/python \
+            -e APP_ENV=dev \
+            -v "$PWD/tests/fixtures/model_compatibility:/app/tests/fixtures/model_compatibility:ro" \
+            -v "$PWD/scripts/check_model_compatibility.py:/app/scripts/check_model_compatibility.py:ro" \
+            churn-api:smoke \
+            /app/scripts/check_model_compatibility.py
 
       - name: Run API container
         run: |

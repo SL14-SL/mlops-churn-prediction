@@ -1,0 +1,32 @@
+flavors:
+  python_function:
+    cloudpickle_version: 3.1.2
+    code: null
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.pyfunc.model
+    python_model: python_model.pkl
+    python_version: 3.12.9
+    streamable: false
+is_signature_from_type_hint: false
+mlflow_version: 3.16.1
+model_id: null
+model_size_bytes: 19474
+model_uuid: f2bc25a623fa4fb09de6708a77be0d5b
+prompts: null
+saved_input_example_info:
+  artifact_path: input_example.json
+  pandas_orient: split
+  serving_input_path: serving_input_example.json
+  type: dataframe
+signature:
+  inputs: '[{"type": "double", "name": "feature_0", "required": true}, {"type": "double",
+    "name": "feature_1", "required": true}, {"type": "double", "name": "feature_2",
+    "required": true}, {"type": "double", "name": "feature_3", "required": true},
+    {"type": "double", "name": "feature_4", "required": true}, {"type": "double",
+    "name": "feature_5", "required": true}]'
+  outputs: '[{"type": "tensor", "tensor-spec": {"dtype": "float64", "shape": [-1]}}]'
+  params: null
+type_hint_from_example: false
+utc_time_created: '2026-10-15 09:22:18.581831'
