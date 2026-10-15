@@ -19,7 +19,7 @@ Customer churn is the example use case. The primary focus is the engineering lay
 For a concise overview of the business problem, implemented solution,
 measured results and production evidence:
 
-[Download the one-page churn prediction case study (PDF)](docs/churn_prediction_case_study.pdf)
+[Download the one-page churn prediction case study (PDF)](docs/churn_prediction_case_study_en.pdf)
 
 ---
 
