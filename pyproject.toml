@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Production-oriented customer churn prediction system"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-    "fastapi==0.143.0",
+    "fastapi==0.161.1",
     "uvicorn==0.54.0",
     "pandas==2.3.3",
     "pyarrow==25.0.1",
@@ -44,7 +44,7 @@ dependencies = [
     "setuptools>=78.1.1",
     "aiohttp>=3.14.3",
     "python-multipart>=0.0.30",
-    "starlette==1.7.0",
+    "starlette==1.9.0",
     "sqlparse>=0.6.0",
     "oauthlib>=4.0.0,<5",
     "urllib3>=2.8.0,<3",
@@ -61,7 +61,7 @@ dev = [
     "httpx2>=2.12.0",
     "pip-audit==2.10.1",
     "pytest==9.1.1",
-    "ruff==0.17.0",
+    "ruff==0.17.2",
 ]
 
 [tool.ruff]
