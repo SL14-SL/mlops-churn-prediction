@@ -73,6 +73,9 @@ jobs:
           format: table
           exit-code: "1"
           trivyignores: .trivyignore.yaml
+          # Frozen model metadata records the original training environment.
+          # Compatibility is checked against current dependencies in main.yml.
+          skip-files: tests/fixtures/model_compatibility/model/requirements.txt,tests/fixtures/model_compatibility/model/uv.lock
 
   container-image:
     name: Scan container image
