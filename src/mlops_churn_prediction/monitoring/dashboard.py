@@ -16,13 +16,15 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 from mlops_churn_prediction.constants import PROJECT_ROOT
+from mlops_churn_prediction.configs.loader import get_path
+from mlops_churn_prediction.monitoring.prediction_store import (
+    read_prediction_history,
+)
 
 st.set_page_config(page_title="Churn MLOps Dashboard", layout="wide")
 
 
-PREDICTION_LOG_FILE = (
-    Path(PROJECT_ROOT) / "data" / "predictions" / "inference_log.parquet"
-)
+PREDICTIONS_PATH = get_path("predictions")
 CUMULATIVE_GT_FILE = (
     Path(PROJECT_ROOT) / "data" / "monitoring" / "cumulative_ground_truth.csv"
 )
@@ -50,10 +52,10 @@ def normalize_customer_id_column(df: pd.DataFrame) -> pd.DataFrame:
 
 def load_prediction_log() -> pd.DataFrame | None:
     """Load and normalize the prediction log."""
-    if not PREDICTION_LOG_FILE.exists():
-        return None
+    df = read_prediction_history(predictions_path=PREDICTIONS_PATH)
 
-    df = pd.read_parquet(PREDICTION_LOG_FILE)
+    if df.empty:
+        return None
     df = normalize_customer_id_column(df)
 
     if "prediction" in df.columns:
@@ -685,7 +687,7 @@ st.caption(
 if prediction_df is None or prediction_df.empty:
     st.warning(
         "No prediction log found yet. Run predictions first so "
-        "`data/predictions/inference_log.parquet` is created."
+        "Prediction history appears after the API has logged a prediction request."
     )
 else:
     latest_perf = (

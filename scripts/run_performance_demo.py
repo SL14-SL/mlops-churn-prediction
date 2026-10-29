@@ -24,6 +24,9 @@ from mlops_churn_prediction.storage.filesystem import (
 from mlops_churn_prediction.monitoring.config import get_business_settings
 from mlops_churn_prediction.monitoring.performance import compute_business_metrics
 from mlops_churn_prediction.utils.logger import get_logger
+from mlops_churn_prediction.monitoring.prediction_store import (
+    read_prediction_history,
+)
 
 
 logger = get_logger(__name__)
@@ -31,7 +34,6 @@ PREDICTIONS_PATH = get_path("predictions")
 RAW_DATA_PATH = get_path("raw_data")
 MONITORING_PATH = get_path("monitoring")
 
-INFERENCE_LOG_FILE = f"{PREDICTIONS_PATH}/inference_log.parquet"
 GROUND_TRUTH_BATCH_DIR = f"{MONITORING_PATH}/ground_truth_batches"
 PERFORMANCE_HISTORY_FILE = f"{MONITORING_PATH}/churn_performance_history.parquet"
 CUMULATIVE_GT_FILE = f"{MONITORING_PATH}/cumulative_ground_truth.csv"
@@ -83,10 +85,12 @@ def normalize_customer_id_column(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def load_predictions() -> pd.DataFrame:
-    if not file_exists(INFERENCE_LOG_FILE):
-        raise FileNotFoundError(f"Prediction log not found: {INFERENCE_LOG_FILE}")
+    df = read_prediction_history(predictions_path=PREDICTIONS_PATH)
 
-    df = pd.read_parquet(INFERENCE_LOG_FILE)
+    if df.empty:
+        raise FileNotFoundError(
+            f"No prediction history found under {PREDICTIONS_PATH}."
+        )
     df = normalize_customer_id_column(df)
 
     if "prediction_id" not in df.columns:

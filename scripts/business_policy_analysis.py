@@ -6,10 +6,14 @@ import pandas as pd
 
 from mlops_churn_prediction.configs.loader import get_path, load_config
 from mlops_churn_prediction.inference.decision import DecisionConfig, DecisionEngine
-
+from mlops_churn_prediction.monitoring.prediction_store import (
+    read_prediction_history,
+)
 
 def load_analysis_data() -> pd.DataFrame:
-    predictions = pd.read_parquet(f"{get_path('predictions')}/inference_log.parquet")
+    predictions = read_prediction_history(
+        predictions_path=get_path("predictions"),
+    )
     ground_truth = pd.read_csv(f"{get_path('monitoring')}/cumulative_ground_truth.csv")
 
     required = {

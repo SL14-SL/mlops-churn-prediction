@@ -4,7 +4,7 @@ from uuid import uuid4
 import pandas as pd
 
 from mlops_churn_prediction.configs.paths import join_uri
-
+from mlops_churn_prediction.storage.filesystem import file_exists, list_files
 
 REQUIRED_COLUMNS = {
     "prediction_id",
@@ -83,3 +83,67 @@ def persist_prediction_batch(
             temporary.unlink(missing_ok=True)
 
     return output_path
+
+
+def read_prediction_history(
+    *,
+    predictions_path: str,
+) -> pd.DataFrame:
+    """Read legacy history and completed batch files without duplicate IDs."""
+    legacy_path = join_uri(predictions_path, "inference_log.parquet")
+    batch_pattern = join_uri(
+        predictions_path,
+        "history",
+        "prediction_date=*",
+        "batch-*.parquet",
+    )
+
+    paths = []
+
+    if file_exists(legacy_path):
+        paths.append(legacy_path)
+
+    # Read batches after legacy data so batch records take precedence.
+    paths.extend(sorted(list_files(batch_pattern)))
+
+    frames = []
+
+    for path in paths:
+        frame = pd.read_parquet(path)
+
+        if frame.empty:
+            continue
+
+        for column in (
+            "prediction_id",
+            "request_id",
+            "release_id",
+            "customerID",
+            "customerid",
+            "customer_id",
+            "TotalCharges",
+            "totalcharges",
+        ):
+            if column in frame.columns:
+                frame[column] = frame[column].astype("string")
+
+        frames.append(frame)
+
+    if not frames:
+        return pd.DataFrame()
+
+    combined = pd.concat(frames, ignore_index=True)
+
+    if "prediction_id" in combined.columns:
+        identifiers = combined["prediction_id"].astype("string")
+        valid_identifiers = (
+            identifiers.notna()
+            & identifiers.str.strip().ne("")
+        )
+        duplicates = (
+            valid_identifiers
+            & identifiers.duplicated(keep="last")
+        )
+        combined = combined.loc[~duplicates]
+
+    return combined.reset_index(drop=True)

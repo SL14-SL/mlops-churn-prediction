@@ -18,6 +18,9 @@ from mlops_churn_prediction.storage.filesystem import (
     file_exists,
 )
 from mlops_churn_prediction.utils.logger import get_logger
+from mlops_churn_prediction.monitoring.prediction_store import (
+    read_prediction_history,
+)
 
 logger = get_logger(__name__)
 
@@ -27,7 +30,6 @@ PREDICTIONS_PATH = get_path("predictions")
 MONITORING_PATH = get_path("monitoring")
 
 SIMULATION_FILE = f"{RAW_DATA_PATH}/simulation_ground_truth.csv"
-INFERENCE_LOG_FILE = f"{PREDICTIONS_PATH}/inference_log.parquet"
 PENDING_LABEL_DIR = f"{MONITORING_PATH}/pending_labels"
 
 API_URL = CFG["api"]["url"]
@@ -63,7 +65,7 @@ def call_prediction_api(batch: pd.DataFrame, request_id: str) -> None:
     """
     Send an unlabeled customer batch to the prediction API.
 
-    The API writes prediction metadata to `inference_log.parquet`. This function
+    The API writes prediction metadata to persistent prediction history. This function
     only triggers prediction generation; prediction IDs are read back from the
     inference log afterwards.
     """
@@ -106,10 +108,12 @@ def load_logged_predictions(request_id: str, expected_rows: int) -> pd.DataFrame
         FileNotFoundError: If the inference log was not created.
         ValueError: If no matching predictions are found.
     """
-    if not file_exists(INFERENCE_LOG_FILE):
-        raise FileNotFoundError(f"Inference log not found: {INFERENCE_LOG_FILE}")
+    log_df = read_prediction_history(predictions_path=PREDICTIONS_PATH)
 
-    log_df = pd.read_parquet(INFERENCE_LOG_FILE)
+    if log_df.empty:
+        raise FileNotFoundError(
+            f"No prediction history found under {PREDICTIONS_PATH}."
+        )
     
     if "request_id" not in log_df.columns:
         raise KeyError("Inference log must contain `request_id`.")
