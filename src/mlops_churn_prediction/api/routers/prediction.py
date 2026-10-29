@@ -36,7 +36,7 @@ from mlops_churn_prediction.inference.pipeline import (
     validate_prediction_input,
 )
 from mlops_churn_prediction.monitoring.prediction_logger import (
-    log_prediction,
+    log_prediction_batch,
 )
 from mlops_churn_prediction.utils.logger import get_logger
 
@@ -145,19 +145,18 @@ def predict(payload: PredictionRequest):
             output["results"],
         )
 
-        for features, result in zip(payload.inputs, results):
-            log_prediction(
-                features,
-                result["churn_probability"],
-                model_alias=bundle.serving_alias,
-                model_version=bundle.model_version,
-                model_run_id=bundle.model_run_id,
-                request_id=output["request_id"],
-                environment=output["environment"],
-                action=result["action"],
-                expected_value=result["expected_value"],
-                customer_value=result.get("customer_value"),
-            )
+        prediction_log_path = log_prediction_batch(
+            inputs=payload.inputs,
+            results=results,
+            request_id=output["request_id"],
+            release_id=bundle.release_id,
+            decision_threshold=bundle.decision_threshold,
+            model_name=bundle.model_name,
+            model_alias=bundle.serving_alias,
+            model_version=bundle.model_version,
+            model_run_id=bundle.model_run_id,
+            environment=output["environment"],
+        )
 
         return {
             "predictions": results,
@@ -172,6 +171,9 @@ def predict(payload: PredictionRequest):
                 "release_id": bundle.release_id,
                 "model_version": bundle.model_version,
                 "model_run_id": bundle.model_run_id,
+                "prediction_logging": (
+                    "persisted" if prediction_log_path is not None else "failed"
+                ),
             },
         }
 

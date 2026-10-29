@@ -1,184 +1,181 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import sys
 from datetime import datetime, timezone
-from pathlib import Path
 from uuid import uuid4
 
 import pandas as pd
 
 from mlops_churn_prediction.configs.loader import get_path
-from mlops_churn_prediction.storage.filesystem import file_exists
-from mlops_churn_prediction.utils.logger import get_logger
+from mlops_churn_prediction.monitoring.prediction_store import (
+    persist_prediction_batch,
+)
 
-logger = get_logger(__name__)
 
 PREDICTIONS = get_path("predictions")
+
+# Raw fields needed for customer matching, drift and subsequent evaluation.
+ALLOWED_INPUT_COLUMNS = frozenset({
+    "customerid",
+    "customer_id",
+    "gender",
+    "seniorcitizen",
+    "partner",
+    "dependents",
+    "tenure",
+    "phoneservice",
+    "multiplelines",
+    "internetservice",
+    "onlinesecurity",
+    "onlinebackup",
+    "deviceprotection",
+    "techsupport",
+    "streamingtv",
+    "streamingmovies",
+    "contract",
+    "paperlessbilling",
+    "paymentmethod",
+    "monthlycharges",
+    "totalcharges",
+})
 
 STRING_LOG_COLUMNS = {
     "customerID",
     "customerid",
     "customer_id",
     "TotalCharges",
+    "totalcharges",
     "prediction_id",
     "prediction_timestamp",
     "prediction_date",
     "environment",
+    "model_name",
     "model_alias",
     "model_version",
     "model_run_id",
     "request_id",
+    "release_id",
     "action",
 }
 
 
-def normalize_prediction_log_schema(
-    df: pd.DataFrame,
-) -> pd.DataFrame:
-    """
-    Normalize prediction-log columns before parquet persistence.
-
-    Raw API payloads can represent fields such as `TotalCharges` with different
-    inferred Python types. Converting identifier, metadata, and string-valued
-    feature columns consistently prevents mixed parquet schemas.
-    """
-    df = df.copy()
+def normalize_prediction_log_schema(df: pd.DataFrame) -> pd.DataFrame:
+    """Normalize identifiers, metadata and string-valued features."""
+    result = df.copy()
 
     for column in STRING_LOG_COLUMNS:
-        if column in df.columns:
-            df[column] = df[column].astype("string")
+        if column in result.columns:
+            result[column] = result[column].astype("string")
 
-    return df
-
-
-def _build_daily_log_path(prediction_date: str) -> str:
-    return f"{PREDICTIONS}/history/prediction_date={prediction_date}/inference_log.parquet"
+    return result
 
 
-def log_prediction(
-    input_data,
-    prediction: float,
+def log_prediction_batch(
     *,
+    inputs: list[dict],
+    results: list[dict],
+    request_id: str,
+    release_id: str,
+    decision_threshold: float,
+    model_name: str | None = None,
     model_alias: str | None = None,
     model_version: str | None = None,
     model_run_id: str | None = None,
-    request_id: str | None = None,
     environment: str | None = None,
-    action: str | None = None, 
-    expected_value: float | None = None, 
-    customer_value: float | None = None,
-) -> None:
-    """
-    Log prediction data to:
-    1. stdout as structured technical metadata without customer inputs or scores
-    2. legacy single-file Parquet history (backward compatibility)
-    3. daily partitioned Parquet history (new structure)
+    predictions_path: str | None = None,
+    fail_on_error: bool = False,
+) -> str | None:
+    """Persist one request batch and emit technical metadata only."""
+    if not inputs or len(inputs) != len(results):
+        raise ValueError("Prediction inputs and results must have equal non-zero lengths.")
 
-    Notes:
-    - The legacy single-file log is kept temporarily so existing monitoring code
-      continues to work.
-    - The daily partitioned log is the forward-looking structure.
-    """
+    for name, value in (("request_id", request_id), ("release_id", release_id)):
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{name} must be a non-empty string.")
+
+    threshold = float(decision_threshold)
+
+    if not math.isfinite(threshold) or not 0 <= threshold <= 1:
+        raise ValueError("Decision threshold must be between zero and one.")
+
+    metadata = {
+        "request_id": request_id,
+        "release_id": release_id,
+        "environment": environment or os.getenv("APP_ENV", "dev"),
+        "model_name": model_name,
+        "model_alias": model_alias,
+        "model_version": model_version,
+        "model_run_id": model_run_id,
+    }
+
     try:
-        if isinstance(input_data, pd.DataFrame):
-            input_data = input_data.to_dict(orient="records")[0]
+        timestamp = datetime.now(timezone.utc).isoformat()
+        records = []
 
-        if not isinstance(input_data, dict):
-            input_data = {"raw_input": str(input_data)}
+        for row_index, (features, result) in enumerate(zip(inputs, results, strict=True)):
+            probability = float(result["churn_probability"])
 
-        prediction_id = str(uuid4())
-        prediction_ts = datetime.now(timezone.utc)
-        prediction_timestamp = prediction_ts.isoformat()
-        prediction_date = prediction_ts.date().isoformat()
-        resolved_environment = environment or os.getenv("APP_ENV", "dev")
+            if not math.isfinite(probability) or not 0 <= probability <= 1:
+                raise ValueError("Prediction probability must be between zero and one.")
 
-        metadata = {
-            "prediction_id": prediction_id,
-            "prediction_timestamp": prediction_timestamp,
-            "prediction_date": prediction_date,
-            "environment": resolved_environment,
-            "model_alias": model_alias,
-            "model_version": model_version,
-            "model_run_id": model_run_id,
-            "request_id": request_id,
-        }
+            selected_features = {
+                key: value
+                for key, value in features.items()
+                if key.lower() in ALLOWED_INPUT_COLUMNS
+            }
 
-        # 1) Structured stdout log for cloud/container logging
-        log_entry = {
+            records.append({
+                **selected_features,
+                **metadata,
+                "prediction_id": str(uuid4()),
+                "prediction_timestamp": timestamp,
+                "row_index": row_index,
+                "prediction": probability,
+                "decision_threshold": threshold,
+                "action": result.get("action"),
+                "expected_value": result.get("expected_value"),
+                "customer_value": result.get("customer_value"),
+            })
+
+        frame = normalize_prediction_log_schema(pd.DataFrame(records))
+
+        output_path = persist_prediction_batch(
+            frame,
+            predictions_path=(
+                predictions_path if predictions_path is not None else PREDICTIONS
+            ),
+        )
+    except Exception as exc:
+        # Exception text can contain record values; emit its type only.
+        print(
+            json.dumps({
+                "event": "prediction_logging_failed",
+                "service": "prediction_api",
+                "rows": len(inputs),
+                "error_type": type(exc).__name__,
+                **metadata,
+            }),
+            file=sys.stdout,
+            flush=True,
+        )
+
+        if fail_on_error:
+            raise
+
+        return None
+
+    print(
+        json.dumps({
             "event": "prediction_completed",
             "service": "prediction_api",
-            "rows": 1,
+            "rows": len(inputs),
             **metadata,
-        }
-        print(json.dumps(log_entry), file=sys.stdout, flush=True)
+        }),
+        file=sys.stdout,
+        flush=True,
+    )
 
-        if resolved_environment == "prod":
-            logger.info(
-                "Production prediction emitted to structured cloud logging "
-                "| prediction_id=%s",
-                prediction_id,
-            )
-            return
-
-        # 2) Persistent row for parquet storage
-        log_data = {
-            **input_data,
-            "prediction": prediction,
-            "action": action,
-            "expected_value": expected_value,
-            "customer_value": customer_value,
-            **metadata,
-        }
-
-        df_new = normalize_prediction_log_schema(
-            pd.DataFrame([log_data])
-        )
-
-        # --- Legacy single-file log (keep for backward compatibility) ---
-        legacy_log_file = os.path.join(PREDICTIONS, "inference_log.parquet")
-
-        if file_exists(legacy_log_file):
-            df_existing = normalize_prediction_log_schema(
-                pd.read_parquet(legacy_log_file)
-            )
-            df_all = pd.concat(
-                [df_existing, df_new],
-                ignore_index=True,
-            )
-        else:
-            df_all = df_new
-
-        df_all = normalize_prediction_log_schema(df_all)
-        df_all.to_parquet(legacy_log_file, index=False)
-
-        # --- New daily-partitioned log ---
-        daily_log_file = _build_daily_log_path(prediction_date)
-
-        if file_exists(daily_log_file):
-            daily_existing = normalize_prediction_log_schema(
-                pd.read_parquet(daily_log_file)
-            )
-            daily_all = pd.concat(
-                [daily_existing, df_new],
-                ignore_index=True,
-            )
-        else:
-            daily_all = df_new
-
-        daily_all = normalize_prediction_log_schema(daily_all)
-
-        if not daily_log_file.startswith("gs://"):
-            Path(daily_log_file).parent.mkdir(parents=True, exist_ok=True)
-
-        daily_all.to_parquet(daily_log_file, index=False)
-
-        logger.info(
-            "Prediction logged successfully to %s and %s",
-            legacy_log_file,
-            daily_log_file,
-        )
-
-    except Exception as e:
-        logger.error(f"Failed to log prediction: {e}")
+    return output_path

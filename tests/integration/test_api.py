@@ -176,7 +176,7 @@ def mock_api_dependencies(
         ),
         patch(
             "mlops_churn_prediction.api.routers.prediction."
-            "log_prediction",
+            "log_prediction_batch",
         ),
     ):
         yield

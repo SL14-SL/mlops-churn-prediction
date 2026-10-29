@@ -1,30 +1,7 @@
 import pandas as pd
 
-from unittest.mock import patch
+from mlops_churn_prediction.monitoring.prediction_logger import normalize_prediction_log_schema
 
-from mlops_churn_prediction.monitoring.prediction_logger import log_prediction, normalize_prediction_log_schema
-
-
-def test_production_prediction_uses_structured_logging_only():
-    with (
-        patch(
-            "mlops_churn_prediction.monitoring.prediction_logger.file_exists"
-        ) as mock_file_exists,
-        patch(
-            "mlops_churn_prediction.monitoring.prediction_logger.pd.DataFrame.to_parquet"
-        ) as mock_to_parquet,
-    ):
-        log_prediction(
-            {"customerID": "test-customer"},
-            0.75,
-            environment="prod",
-            model_alias="champion",
-            model_version="1",
-            model_run_id="run-1",
-        )
-
-    mock_file_exists.assert_not_called()
-    mock_to_parquet.assert_not_called()
     
 
 def test_normalize_prediction_log_schema_handles_mixed_total_charges():
