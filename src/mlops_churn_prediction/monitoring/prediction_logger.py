@@ -72,7 +72,7 @@ def log_prediction(
 ) -> None:
     """
     Log prediction data to:
-    1. stdout as structured JSON (useful for container/cloud logging)
+    1. stdout as structured technical metadata without customer inputs or scores
     2. legacy single-file Parquet history (backward compatibility)
     3. daily partitioned Parquet history (new structure)
 
@@ -107,12 +107,9 @@ def log_prediction(
 
         # 1) Structured stdout log for cloud/container logging
         log_entry = {
-            "input": input_data,
-            "prediction": prediction,
-            "action": action,
-            "expected_value": expected_value,
+            "event": "prediction_completed",
             "service": "prediction_api",
-            "customer_value": customer_value,
+            "rows": 1,
             **metadata,
         }
         print(json.dumps(log_entry), file=sys.stdout, flush=True)
