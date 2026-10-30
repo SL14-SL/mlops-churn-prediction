@@ -2,6 +2,13 @@ from unittest.mock import patch
 
 import pytest
 
+from copy import deepcopy
+
+import pandas as pd
+
+from mlops_churn_prediction.api.routers import prediction as prediction_router
+from mlops_churn_prediction.monitoring import prediction_logger
+
 import mlops_churn_prediction.api.serving_state as serving_state
 from mlops_churn_prediction.inference.releases.contracts import (
     ArtifactReference,
@@ -176,7 +183,7 @@ def mock_api_dependencies(
         ),
         patch(
             "mlops_churn_prediction.api.routers.prediction."
-            "log_prediction",
+            "log_prediction_batch",
         ),
     ):
         yield
@@ -582,3 +589,128 @@ def test_failed_rollback_keeps_previous_bundle(
     )
 
     activate_pointer.assert_not_called()
+
+
+@pytest.mark.parametrize("environment", ["dev", "prod"])
+def test_predict_persists_one_complete_batch(
+    api_client,
+    api_headers,
+    sample_prediction_payload,
+    monkeypatch,
+    tmp_path,
+    environment,
+):
+    payload = deepcopy(sample_prediction_payload)
+    first_customer = payload["inputs"][0]
+    first_customer["private_note"] = "must-not-be-persisted"
+
+    payload["inputs"].append({
+        **first_customer,
+        "customerID": "second-customer",
+    })
+
+    pipeline_output = deepcopy(
+        prediction_router.run_prediction_pipeline.return_value
+    )
+    first_result = deepcopy(pipeline_output["results"][0])
+    second_result = deepcopy(first_result)
+    first_result["churn_probability"] = 0.2
+    second_result["churn_probability"] = 0.8
+
+    pipeline_output["results"] = [first_result, second_result]
+    pipeline_output["environment"] = environment
+    pipeline_output["dq_summary"]["row_count"] = 2
+
+    monkeypatch.setattr(
+        prediction_router.run_prediction_pipeline,
+        "return_value",
+        pipeline_output,
+    )
+    monkeypatch.setattr(
+        prediction_logger,
+        "PREDICTIONS",
+        str(tmp_path),
+    )
+    monkeypatch.setattr(
+        prediction_router,
+        "log_prediction_batch",
+        prediction_logger.log_prediction_batch,
+    )
+
+    response = api_client.post(
+        "/predict",
+        json=payload,
+        headers=api_headers,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["predictions"]) == 2
+    assert body["metadata"]["prediction_logging"] == "persisted"
+
+    files = list(tmp_path.rglob("batch-*.parquet"))
+
+    assert len(files) == 1
+    assert not (tmp_path / "inference_log.parquet").exists()
+
+    stored = pd.read_parquet(files[0])
+
+    assert len(stored) == 2
+    assert stored["prediction_id"].nunique() == 2
+    assert stored["row_index"].tolist() == [0, 1]
+    assert stored["customerID"].tolist() == [
+        first_customer["customerID"],
+        "second-customer",
+    ]
+    assert stored["prediction"].tolist() == [0.2, 0.8]
+    assert stored["request_id"].tolist() == ["test-request", "test-request"]
+    assert stored["release_id"].tolist() == ["test-release", "test-release"]
+    assert stored["model_version"].tolist() == ["test-version", "test-version"]
+    assert stored["decision_threshold"].tolist() == [0.5, 0.5]
+    assert stored["environment"].tolist() == [environment, environment]
+    assert "private_note" not in stored.columns
+
+
+def test_predict_reports_storage_failure_without_losing_prediction(
+    api_client,
+    api_headers,
+    sample_prediction_payload,
+    monkeypatch,
+    tmp_path,
+    capsys,
+):
+    def fail_to_persist(*args, **kwargs):
+        raise OSError("private-storage-error-details")
+
+    monkeypatch.setattr(
+        prediction_logger,
+        "PREDICTIONS",
+        str(tmp_path),
+    )
+    monkeypatch.setattr(
+        prediction_logger,
+        "persist_prediction_batch",
+        fail_to_persist,
+    )
+    monkeypatch.setattr(
+        prediction_router,
+        "log_prediction_batch",
+        prediction_logger.log_prediction_batch,
+    )
+
+    response = api_client.post(
+        "/predict",
+        json=sample_prediction_payload,
+        headers=api_headers,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["predictions"]) == 1
+    assert body["metadata"]["prediction_logging"] == "failed"
+    assert not list(tmp_path.rglob("*.parquet"))
+
+    captured = capsys.readouterr().out
+    assert "prediction_logging_failed" in captured
+    assert "private-storage-error-details" not in captured
+    assert "private-storage-error-details" not in response.text

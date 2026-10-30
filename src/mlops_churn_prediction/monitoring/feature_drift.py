@@ -15,6 +15,9 @@ from mlops_churn_prediction.storage.filesystem import (
 )
 from mlops_churn_prediction.monitoring.config import get_feature_drift_settings
 from mlops_churn_prediction.utils.logger import get_logger
+from mlops_churn_prediction.monitoring.prediction_store import (
+    read_prediction_history,
+)
 
 logger = get_logger(__name__)
 
@@ -107,20 +110,28 @@ def load_reference_features() -> pd.DataFrame:
 
 
 def load_current_inference_features() -> pd.DataFrame:
-    """
-    Load the current inference log as live data for drift detection.
-    """
-    path = f"{PREDICTIONS_PATH}/inference_log.parquet"
+    """Load prediction history for feature drift monitoring."""
+    df = read_prediction_history(predictions_path=PREDICTIONS_PATH)
 
-    if not file_exists(path):
-        logger.info("No inference log found yet.")
-        return pd.DataFrame()
+    if df.empty:
+        logger.info("No inference history found yet.")
+        return df
 
-    df = pd.read_parquet(path)
     df.columns = df.columns.str.lower()
 
+    if "prediction_timestamp" in df.columns:
+        df["prediction_timestamp"] = pd.to_datetime(
+            df["prediction_timestamp"],
+            errors="coerce",
+            utc=True,
+        )
+
     if "timestamp" in df.columns:
-        df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+        df["timestamp"] = pd.to_datetime(
+            df["timestamp"],
+            errors="coerce",
+            utc=True,
+        )
 
     return df
 
