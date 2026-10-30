@@ -287,8 +287,20 @@ root rather than `/app/src`. Verify the expected path and mounted data:
 ```bash
 docker compose exec -T dashboard uv run --no-sync python -c \
   "from mlops_churn_prediction.constants import PROJECT_ROOT; print(PROJECT_ROOT)"
-docker compose exec -T dashboard ls -lh /app/data/predictions/inference_log.parquet
+docker compose exec -T dashboard find \
+  /app/data/predictions/history \
+  -type f \
+  -name 'batch-*.parquet'
 ```
+
+New predictions are stored in separate files under
+`history/prediction_date=YYYY-MM-DD/batch-<uuid>.parquet`.
+The shared history reader also supports the legacy `inference_log.parquet`
+when present. New requests do not append to that legacy file.
+
+The local Compose data mount preserves batch files across API container
+recreation. API response metadata should report
+`prediction_logging: persisted` after a successful write.
 
 Reload the dashboard after correcting the path. Use one experiment's matching
 predictions, delayed labels and performance history for a coherent dashboard.

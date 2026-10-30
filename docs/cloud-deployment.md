@@ -280,8 +280,19 @@ to the API while preserving application-key checks. It does not make MLflow
 public. The recorded demo used public network access to the API.
 
 The production Swagger UI is available at the deployed API's `/docs` route.
-API production predictions are emitted as structured cloud logs; local Parquet
-dashboard screenshots do not establish cloud-hosted monitoring coverage.
+
+Prediction records are persisted as separate Parquet batches at the configured
+prediction storage path. Production deployments should use a persistent
+`gs://` location; the container's local filesystem is not durable storage.
+
+Structured stdout events contain technical metadata, not customer records
+or prediction scores. API response metadata reports persistence as
+`prediction_logging: persisted` or `prediction_logging: failed`.
+
+Batch persistence and retention across API container recreation were verified
+locally. Persistence against a real GCS bucket remains to be verified during
+the next cloud deployment. Local dashboard screenshots do not establish
+cloud-hosted monitoring coverage.
 
 ## Roll Back or Restore an API Revision
 

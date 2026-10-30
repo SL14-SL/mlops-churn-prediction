@@ -37,7 +37,7 @@ flowchart TD
 | Secret Manager | Supplies API and MLflow database credentials | Versioned secrets |
 | Serving release storage | Immutable manifests and inference artifacts | Versioned release directories and active pointer |
 | FastAPI | Request validation, inference and business decisions | Process-local active `ServingBundle` |
-| Prediction logger | Prediction, lineage and decision logging | Current log and date-partitioned history |
+| Prediction logger | Batch persistence with prediction, request and release lineage; technical stdout events | Separate date-partitioned Parquet batches and legacy history read compatibility |
 | ML monitoring | Data quality, drift and delayed-label performance | Monitoring history and retraining state |
 | Prometheus | Runtime metric collection and alert-rule evaluation | Time-series metrics |
 | Grafana | SLO and service visualization | Provisioned dashboards |

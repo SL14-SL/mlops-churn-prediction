@@ -37,11 +37,19 @@ This repository demonstrates a production-oriented ML lifecycle beyond notebook-
 - immutable serving releases with checksummed manifests
 - atomic activation and rollback of complete serving bundles
 - FastAPI inference, prioritization and campaign simulation
-- prediction logging and delayed-label performance evaluation
+- batch-based prediction persistence and delayed-label performance evaluation
+- technical stdout events without customer records or prediction scores
 - technical and business-oriented monitoring
 - Prometheus metrics, Grafana SLO dashboards and Alertmanager notifications
 - CI/CD with tests, container builds and vulnerability scanning
 - Terraform-managed deployment to Google Cloud Run
+
+Each prediction request is persisted as a separate Parquet batch with
+prediction IDs, request ID and serving-release lineage. API response metadata
+reports `prediction_logging` as `persisted` or `failed`. A persistence failure
+does not discard an otherwise successful prediction response. Structured
+stdout events contain technical metadata rather than customer records or
+prediction scores.
 
 The goal is not merely to train a classifier, but to demonstrate how an ML system can be operated, observed and changed safely over time.
 
