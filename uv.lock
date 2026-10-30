@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = "==3.12.*"
 resolution-markers = [
     "platform_machine == 'x86_64' and sys_platform == 'darwin'",
@@ -1662,7 +1662,7 @@ requires-dist = [
     { name = "google-cloud-bigquery", specifier = ">=3.40.1" },
     { name = "google-cloud-bigquery-storage", specifier = ">=2.36.2" },
     { name = "google-cloud-run", specifier = ">=0.15.0" },
-    { name = "google-cloud-storage", specifier = ">=3.9.0" },
+    { name = "google-cloud-storage", specifier = ">=3,<4" },
     { name = "mako", specifier = ">=1.3.12" },
     { name = "mlflow", specifier = "==3.17.2" },
     { name = "mlflow-cloud-run-auth", editable = "plugins/mlflow-cloud-run-auth" },
