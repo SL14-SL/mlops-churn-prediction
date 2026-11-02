@@ -62,6 +62,13 @@ updates:
         versions:
           - ">=26,<27"
 
+      # Upgrade FastAPI together with Prefect and verify server compatibility.
+      - dependency-name: fastapi
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+
   - package-ecosystem: github-actions
     directory: /
     schedule:
