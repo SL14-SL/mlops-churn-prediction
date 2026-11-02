@@ -52,6 +52,16 @@ updates:
           - version-update:semver-minor
           - version-update:semver-patch
 
+      # Prefect 3.9.0 requires FastAPI <0.151; incompatible with our runtime.
+      - dependency-name: prefect
+        versions:
+          - "3.9.0"
+
+      # MLflow 3.17.2 requires PyArrow <26.
+      - dependency-name: pyarrow
+        versions:
+          - ">=26,<27"
+
   - package-ecosystem: github-actions
     directory: /
     schedule:
