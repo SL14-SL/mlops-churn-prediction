@@ -1,6 +1,6 @@
 # 🚀 Production-Oriented MLOps Blueprint for Customer Churn Prediction
 
-End-to-end MLOps showcase for deploying, monitoring and continuously improving a customer churn classification system in local and cloud environments.
+End-to-end MLOps showcase for serving churn predictions and cost-aware retention recommendations, monitoring model quality and controlling model updates in local and Google Cloud environments.
 
 Customer churn is the example use case. The primary focus is the engineering layer required to operate machine learning reliably after training: reproducible data processing, experiment tracking, controlled model promotion, atomic serving releases, API observability, delayed-label monitoring, guarded retraining, rollback and automated cloud deployment.
 
@@ -16,11 +16,12 @@ Customer churn is the example use case. The primary focus is the engineering lay
 
 ## Project Case Study
 
-For a concise overview of the business problem, implemented solution,
-measured results and production evidence:
+A one-page overview of the practical benefits: cost-aware retention
+recommendations, repeatable workflows, checked model updates and a tested
+application rollback.
 
-[Download the one-page churn prediction case study (PDF)](docs/churn_prediction_case_study_en.pdf)
-
+- [English case study (PDF)](docs/churn_prediction_case_study_en.pdf)
+- [German case study (PDF)](docs/churn_prediction_case_study_de.pdf)
 ---
 
 
@@ -192,6 +193,10 @@ max_discount_rate: 0.2
 ```
 
 The decision engine supports actions such as `offer_discount`, `send_email` and `no_action`. Batch prioritization selects the most valuable interventions under the configured policy and budget.
+
+These actions are recommendations returned by the service. The demo does
+not send emails, issue discounts or execute a live retention campaign.
+Uplift values are configurable assumptions, not measured treatment effects.
 
 ---
 
