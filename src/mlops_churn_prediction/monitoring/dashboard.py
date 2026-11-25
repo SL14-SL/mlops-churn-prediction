@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -20,14 +19,24 @@ from mlops_churn_prediction.configs.loader import get_path
 from mlops_churn_prediction.monitoring.prediction_store import (
     read_prediction_history,
 )
+from mlops_churn_prediction.monitoring.theme import (
+    ACTION_COLORS,
+    CHART_VALUE_FONT_SIZE,
+    GREEN,
+    LIFECYCLE_COLORS,
+    MUTED_GREEN,
+    PERFORMANCE_COLORS,
+    PROFIT_COLORS,
+    TEXT,
+    WHITE,
+    apply_chart_theme,
+)
 
 st.set_page_config(page_title="Churn MLOps Dashboard", layout="wide")
 
 
 PREDICTIONS_PATH = get_path("predictions")
-CUMULATIVE_GT_FILE = (
-    Path(PROJECT_ROOT) / "data" / "monitoring" / "cumulative_ground_truth.csv"
-)
+CUMULATIVE_GT_FILE = Path(PROJECT_ROOT) / "data" / "monitoring" / "cumulative_ground_truth.csv"
 PERFORMANCE_HISTORY_FILE = (
     Path(PROJECT_ROOT) / "data" / "monitoring" / "churn_performance_history.parquet"
 )
@@ -35,9 +44,7 @@ RETRAINING_EVENT_HISTORY_FILE = (
     Path(PROJECT_ROOT) / "data" / "monitoring" / "retraining_event_history.parquet"
 )
 PROFIT_CURVE_FILE = Path(PROJECT_ROOT) / "data" / "monitoring" / "profit_curve.parquet"
-UPLIFT_SENSITIVITY_FILE = (
-    Path(PROJECT_ROOT) / "data" / "monitoring" / "uplift_sensitivity.csv"
-)
+UPLIFT_SENSITIVITY_FILE = Path(PROJECT_ROOT) / "data" / "monitoring" / "uplift_sensitivity.csv"
 
 
 def normalize_customer_id_column(df: pd.DataFrame) -> pd.DataFrame:
@@ -73,9 +80,7 @@ def load_prediction_log() -> pd.DataFrame | None:
             )
 
         df["decision_threshold"] = decision_threshold
-        df["churn_prediction"] = (df["churn_probability"] >= decision_threshold).astype(
-            "Int64"
-        )
+        df["churn_prediction"] = (df["churn_probability"] >= decision_threshold).astype("Int64")
 
     if "expected_value" in df.columns:
         df["expected_profit"] = pd.to_numeric(df["expected_value"], errors="coerce")
@@ -175,10 +180,7 @@ def attach_ground_truth(
     if "prediction_id" not in prediction_df.columns:
         return prediction_df
 
-    if (
-        "prediction_id" not in ground_truth_df.columns
-        or "churn" not in ground_truth_df.columns
-    ):
+    if "prediction_id" not in ground_truth_df.columns or "churn" not in ground_truth_df.columns:
         return prediction_df
 
     prediction_df = prediction_df.copy()
@@ -204,9 +206,7 @@ def compute_model_metrics(df: pd.DataFrame) -> dict[str, float] | None:
     if not has_labeled_data(df):
         return None
 
-    labeled = df.dropna(
-        subset=["churn", "churn_prediction", "churn_probability"]
-    ).copy()
+    labeled = df.dropna(subset=["churn", "churn_prediction", "churn_probability"]).copy()
 
     if labeled.empty:
         return None
@@ -222,9 +222,7 @@ def compute_model_metrics(df: pd.DataFrame) -> dict[str, float] | None:
         "brier_score": brier_score_loss(y_true, y_prob),
     }
 
-    metrics["roc_auc"] = (
-        roc_auc_score(y_true, y_prob) if y_true.nunique() > 1 else float("nan")
-    )
+    metrics["roc_auc"] = roc_auc_score(y_true, y_prob) if y_true.nunique() > 1 else float("nan")
 
     return metrics
 
@@ -237,38 +235,37 @@ def build_probability_chart(df: pd.DataFrame) -> go.Figure:
         nbins=25,
     )
 
+    fig.update_traces(
+        marker={
+            "color": GREEN,
+            "line": {
+                "color": WHITE,
+                "width": 1,
+            },
+        },
+    )
+
     fig.update_layout(
-        height=420,
-        template="plotly_dark",
+        height=480,
         xaxis_title="Churn Probability",
         yaxis_title="Number of Predictions",
+        margin={
+            "l": 60,
+            "r": 25,
+            "t": 30,
+            "b": 65,
+        },
     )
 
-    fig.update_xaxes(
-        title_font=dict(size=18),
-        tickfont=dict(size=16),
-    )
-    fig.update_yaxes(
-        title_font=dict(size=18),
-        tickfont=dict(size=16),
-    )
-    fig.update_layout(
-        legend_font=dict(size=16),
-    )
-
-    return fig
+    return apply_chart_theme(fig)
 
 
 def build_action_chart(
     df: pd.DataFrame,
 ) -> go.Figure:
     """Build retention action distribution chart."""
-    action_counts = (
-        df["action"]
-        .fillna("unknown")
-        .value_counts()
-        .reset_index()
-    )
+    action_counts = df["action"].fillna("unknown").value_counts().reset_index()
+
     action_counts.columns = [
         "action",
         "count",
@@ -282,9 +279,7 @@ def build_action_chart(
     }
 
     action_counts["action_label"] = (
-        action_counts["action"]
-        .map(action_labels)
-        .fillna(action_counts["action"])
+        action_counts["action"].map(action_labels).fillna(action_counts["action"])
     )
 
     fig = px.pie(
@@ -295,16 +290,40 @@ def build_action_chart(
     )
 
     fig.update_traces(
+        marker={
+            "colors": [
+                ACTION_COLORS.get(label, MUTED_GREEN) for label in action_counts["action_label"]
+            ],
+            "line": {
+                "color": WHITE,
+                "width": 2,
+            },
+        },
         textinfo="percent",
-        textfont=dict(size=18, color="white"),
-    )
-    fig.update_layout(
-        height=420,
-        template="plotly_dark",
-        legend_font=dict(size=16),
+        textposition="inside",
+        textfont={
+            "size": CHART_VALUE_FONT_SIZE,
+            "color": TEXT,
+        },
     )
 
-    return fig
+    fig.update_layout(
+        height=480,
+        legend={
+            "orientation": "h",
+            "y": -0.1,
+            "x": 0.5,
+            "xanchor": "center",
+        },
+        margin={
+            "l": 25,
+            "r": 25,
+            "t": 30,
+            "b": 65,
+        },
+    )
+
+    return apply_chart_theme(fig)
 
 
 def build_profit_curve_chart(df: pd.DataFrame) -> go.Figure:
@@ -319,10 +338,13 @@ def build_profit_curve_chart(df: pd.DataFrame) -> go.Figure:
             y=df["expected_profit"],
             mode="lines+markers",
             name="Expected Profit",
+            line={
+                "color": PROFIT_COLORS["expected_profit"],
+                "width": 4,
+                "dash": "dash",
+            },
             hovertemplate=(
-                "Minimum required profit: €%{x:.2f}<br>"
-                "Expected profit: €%{y:,.2f}"
-                "<extra></extra>"
+                "Minimum required profit: €%{x:.2f}<br>Expected profit: €%{y:,.2f}<extra></extra>"
             ),
         ),
         secondary_y=False,
@@ -334,10 +356,12 @@ def build_profit_curve_chart(df: pd.DataFrame) -> go.Figure:
             y=df["realized_profit"],
             mode="lines+markers",
             name="Realized Profit",
+            line={
+                "color": PROFIT_COLORS["realized_profit"],
+                "width": 4,
+            },
             hovertemplate=(
-                "Minimum required profit: €%{x:.2f}<br>"
-                "Realized profit: €%{y:,.2f}"
-                "<extra></extra>"
+                "Minimum required profit: €%{x:.2f}<br>Realized profit: €%{y:,.2f}<extra></extra>"
             ),
         ),
         secondary_y=False,
@@ -352,7 +376,8 @@ def build_profit_curve_chart(df: pd.DataFrame) -> go.Figure:
                 name="Actions Selected",
                 line={
                     "dash": "dot",
-                    "color": "#00CC96",
+                    "color": PROFIT_COLORS["actions_count"],
+                    "width": 3,
                 },
                 hovertemplate=(
                     "Minimum required profit: €%{x:.2f}<br>"
@@ -364,16 +389,21 @@ def build_profit_curve_chart(df: pd.DataFrame) -> go.Figure:
         )
 
     fig.update_layout(
-        height=450,
-        template="plotly_dark",
+        height=560,
         hovermode="x unified",
-        xaxis_title=("Minimum Expected Profit Required per Action (€)"),
+        xaxis_title="Minimum Expected Profit Required per Action (€)",
         legend={
             "orientation": "h",
             "yanchor": "bottom",
-            "y": 1.02,
-            "xanchor": "right",
-            "x": 1,
+            "y": 1.15,
+            "xanchor": "left",
+            "x": 0,
+        },
+        margin={
+            "l": 80,
+            "r": 80,
+            "t": 110,
+            "b": 65,
         },
     )
 
@@ -381,27 +411,18 @@ def build_profit_curve_chart(df: pd.DataFrame) -> go.Figure:
         title_text="Total Simulated Profit (€)",
         secondary_y=False,
     )
+
     fig.update_yaxes(
         title_text="Actions Selected",
         rangemode="tozero",
         secondary_y=True,
     )
 
-    fig.update_xaxes(
-        title_font=dict(size=18),
-        tickfont=dict(size=16),
-    )
-    fig.update_yaxes(
-        title_font=dict(size=18),
-        tickfont=dict(size=16),
-    )
-    fig.update_layout(
-        legend_font=dict(size=16),
-    )
+    apply_chart_theme(fig)
 
-    fig.update_traces(
-        line=dict(width=4),
-        selector=dict(type="scatter"),
+    fig.update_yaxes(
+        showgrid=False,
+        secondary_y=True,
     )
 
     return fig
@@ -479,10 +500,7 @@ def build_performance_history_chart(
             errors="coerce",
         )
 
-    if (
-        "simulation_day" not in chart_df.columns
-        or chart_df["simulation_day"].isna().all()
-    ):
+    if "simulation_day" not in chart_df.columns or chart_df["simulation_day"].isna().all():
         chart_df["simulation_day"] = range(
             1,
             len(chart_df) + 1,
@@ -493,9 +511,7 @@ def build_performance_history_chart(
             index=chart_df.index,
         )
 
-        chart_df["simulation_day"] = (
-            chart_df["simulation_day"].fillna(fallback_days).astype(int)
-        )
+        chart_df["simulation_day"] = chart_df["simulation_day"].fillna(fallback_days).astype(int)
 
     fig = go.Figure()
 
@@ -513,6 +529,13 @@ def build_performance_history_chart(
                     y=chart_df[col],
                     mode="lines+markers",
                     name=label,
+                    line={
+                        "color": PERFORMANCE_COLORS[col],
+                        "width": 3,
+                    },
+                    marker={
+                        "size": 7,
+                    },
                 )
             )
 
@@ -551,20 +574,14 @@ def build_performance_history_chart(
             stored_simulation_day = event.get("simulation_day")
 
             if pd.notna(stored_simulation_day):
-                matching_rows = chart_df[
-                    chart_df["simulation_day"] == int(stored_simulation_day)
-                ]
+                matching_rows = chart_df[chart_df["simulation_day"] == int(stored_simulation_day)]
 
                 if not matching_rows.empty:
                     event_row = matching_rows.iloc[-1]
                 else:
                     event_row = chart_df.iloc[-1]
 
-            elif (
-                time_column is None
-                or pd.isna(event_time)
-                or chart_df["_event_time"].isna().all()
-            ):
+            elif time_column is None or pd.isna(event_time) or chart_df["_event_time"].isna().all():
                 event_row = chart_df.iloc[-1]
             else:
                 time_distance = (chart_df["_event_time"] - event_time).abs()
@@ -581,9 +598,13 @@ def build_performance_history_chart(
                     mode="markers",
                     name="Retraining Executed",
                     marker={
-                        "size": 14,
+                        "size": 12,
                         "symbol": "diamond",
-                        "color": "#FFA15A",
+                        "color": LIFECYCLE_COLORS["retraining_event"],
+                        "line": {
+                            "color": WHITE,
+                            "width": 1,
+                        },
                     },
                     showlegend=not legend_added,
                     customdata=[
@@ -618,51 +639,44 @@ def build_performance_history_chart(
                         mode="markers",
                         name="Champion Promoted",
                         marker={
-                            "size": 18,
+                            "size": 21,
                             "symbol": "star",
-                            "color": "#00CC96",
+                            "color": LIFECYCLE_COLORS["champion_promoted"],
+                            "line": {
+                                "color": WHITE,
+                                "width": 1,
+                            },
                         },
                         showlegend=(not promotion_legend_added),
                     )
                 )
                 promotion_legend_added = True
 
-    fig.update_layout(
-        height=500,
-        template="plotly_dark",
-        hovermode="x unified",
-        xaxis_title="Simulation day",
-        yaxis_title="Metric value",
-        xaxis={
-            "dtick": 1,
-        },
-        legend={
-            "orientation": "h",
-            "yanchor": "bottom",
-            "y": 1.02,
-            "xanchor": "right",
-            "x": 1,
-        },
-    )
+        fig.update_layout(
+            height=600,
+            hovermode="x unified",
+            xaxis_title="Simulation day",
+            yaxis_title="Metric value",
+            xaxis={
+                "dtick": 1,
+            },
+            legend={
+                "orientation": "h",
+                "yanchor": "bottom",
+                "y": 1.15,
+                "xanchor": "left",
+                "x": 0,
+            },
+            margin={
+                "l": 75,
+                "r": 30,
+                "t": 110,
+                "b": 65,
+            },
+        )
 
-    fig.update_xaxes(
-        title_font=dict(size=18),
-        tickfont=dict(size=16),
-    )
-    fig.update_yaxes(
-        title_font=dict(size=18),
-        tickfont=dict(size=16),
-    )
-    fig.update_layout(
-        legend_font=dict(size=16),
-    )
+        return apply_chart_theme(fig)
 
-    fig.update_traces(
-        line=dict(width=4),
-        selector=dict(type="scatter"),
-    )
-
-    return fig
 
 prediction_df = load_prediction_log()
 ground_truth_df = load_ground_truth()
@@ -675,10 +689,9 @@ uplift_sensitivity_df = load_uplift_sensitivity()
 
 st.title("Churn Prediction & Retention Monitoring")
 st.markdown(
-    "Track churn risk, retention recommendations, model performance "
-    "and retraining decisions."
+    "Track churn risk, retention recommendations, model performance and retraining decisions."
 )
-st.caption(
+st.markdown(
     "Demo results from a controlled concept-drift experiment. "
     "Business outcomes are simulated using configured customer values, "
     "intervention costs and uplift assumptions."
@@ -692,10 +705,7 @@ if prediction_df is None or prediction_df.empty:
 else:
     latest_perf = (
         performance_history_df.iloc[-1]
-        if (
-            performance_history_df is not None
-            and not performance_history_df.empty
-        )
+        if (performance_history_df is not None and not performance_history_df.empty)
         else None
     )
 
@@ -713,12 +723,7 @@ else:
     total_predictions = len(prediction_df)
     avg_churn_probability = prediction_df["churn_probability"].mean()
 
-    above_threshold_share = (
-        prediction_df[
-            "churn_probability"
-        ]
-        >= active_threshold
-    ).mean()
+    above_threshold_share = (prediction_df["churn_probability"] >= active_threshold).mean()
 
     if "action" in prediction_df.columns:
         actioned = prediction_df["action"].ne("no_action")
@@ -743,10 +748,7 @@ else:
     k3.metric(
         "Above Decision Threshold",
         f"{above_threshold_share:.2%}",
-        help=(
-            "Share of predictions at or above "
-            f"the active threshold ({active_threshold:.2f})."
-        ),
+        help=(f"Share of predictions at or above the active threshold ({active_threshold:.2f})."),
     )
     k4.metric(
         "Action Rate",
@@ -777,7 +779,7 @@ else:
             f"{active_threshold:.2f}",
         )
 
-        st.caption("Prediction and action metrics cover all logged predictions.")
+        st.markdown("Prediction and action metrics cover all logged predictions.")
 
     if performance_history_df is not None and not performance_history_df.empty:
         latest_perf = performance_history_df.iloc[-1]
@@ -830,7 +832,7 @@ else:
             expected_profit / labeled_action_count if labeled_action_count > 0 else 0.0
         )
 
-        st.subheader("💶 Simulated Business Outcomes")
+        st.subheader("Simulated Business Outcomes")
 
         r1, r2, r3, r4 = st.columns(4)
         r1.metric(
@@ -860,7 +862,7 @@ else:
             f"{realized_profit_per_action:,.2f} €",
         )
 
-        st.caption(
+        st.markdown(
             "Gross saved value − intervention costs "
             "= realized net profit. Expected and realized "
             "outcomes use released labels only."
@@ -902,9 +904,7 @@ else:
             ),
         }
     else:
-        metrics = compute_model_metrics(
-            prediction_df
-        )
+        metrics = compute_model_metrics(prediction_df)
 
     if metrics is not None:
         m1, m2, m3, m4, m5 = st.columns(5)
@@ -929,21 +929,19 @@ else:
             f"{metrics['brier_score']:.3f}",
         )
     else:
-        st.info(
-            "No labeled ground truth available yet. "
-            "Showing serving and action metrics only."
-        )
+        st.info("No labeled ground truth available yet. Showing serving and action metrics only.")
 
     st.divider()
 
     if performance_history_df is not None and not performance_history_df.empty:
-        st.subheader("📊 Model Performance Trend")
+        st.subheader("Model Performance Trend")
         st.plotly_chart(
             build_performance_history_chart(
                 performance_history_df,
                 retraining_event_history_df,
             ),
             width="stretch",
+            theme=None,
         )
 
     st.divider()
@@ -951,26 +949,28 @@ else:
     distribution_left, distribution_right = st.columns(2)
 
     with distribution_left:
-        st.subheader("📈 Churn Probability Distribution")
+        st.subheader("Churn Probability Distribution")
         st.plotly_chart(
             build_probability_chart(prediction_df),
             width="stretch",
+            theme=None,
         )
 
     with distribution_right:
         if "action" in prediction_df.columns:
-            st.subheader("🎯 Retention Actions")
+            st.subheader("Retention Actions")
             st.plotly_chart(
                 build_action_chart(prediction_df),
                 width="stretch",
+                theme=None,
             )
         else:
             st.info("No `action` column found in the prediction log.")
 
     st.divider()
 
-    st.subheader("💼 Business Policy Analysis")
-    st.caption("Offline sensitivity analysis on predictions with released labels.")
+    st.subheader("Business Policy Analysis")
+    st.markdown("Offline sensitivity analysis on predictions with released labels.")
 
     st.markdown("#### Minimum-Profit Threshold Sensitivity")
 
@@ -978,17 +978,18 @@ else:
         st.plotly_chart(
             build_profit_curve_chart(profit_curve_df),
             width="stretch",
+            theme=None,
         )
 
         best_realized = profit_curve_df.loc[profit_curve_df["realized_profit"].idxmax()]
 
-        st.caption(
+        st.markdown(
             "Uses logged customer values and configured intervention costs, uplift "
             "assumptions and per-request discount budgets. Each threshold filters "
             "budget-allocated actions; freed budget is not reallocated. "
             "Profit totals cover predictions with available labels."
         )
-        st.caption(
+        st.markdown(
             "Highest simulated realized profit within "
             "the tested threshold range: "
             f"minimum expected profit "
@@ -997,14 +998,10 @@ else:
             f"= {best_realized['realized_profit']:,.2f} €."
         )
     else:
-        st.info(
-            "No profit curve found yet. Run "
-            "`uv run --no-sync python "
-            "scripts/profit_curve.py`."
-        )
+        st.info("No profit curve found yet. Run `uv run --no-sync python scripts/profit_curve.py`.")
 
     with st.expander("Intervention-uplift assumption sensitivity"):
-        st.caption(
+        st.markdown(
             "Exploratory scenario analysis. Uplift "
             "values are hypothetical assumptions and "
             "are not estimated causal treatment effects."
@@ -1014,21 +1011,15 @@ else:
             uplift_scenarios = build_uplift_scenario_table(uplift_sensitivity_df)
 
             if uplift_scenarios.empty:
-                st.warning(
-                    "The uplift sensitivity file does not contain the required columns."
-                )
+                st.warning("The uplift sensitivity file does not contain the required columns.")
             else:
                 st.dataframe(
                     uplift_scenarios,
                     width="stretch",
                     hide_index=True,
                     column_config={
-                        "Contact uplift": (
-                            st.column_config.NumberColumn(format="percent")
-                        ),
-                        "Discount uplift": (
-                            st.column_config.NumberColumn(format="percent")
-                        ),
+                        "Contact uplift": (st.column_config.NumberColumn(format="percent")),
+                        "Discount uplift": (st.column_config.NumberColumn(format="percent")),
                         "Simulated realized profit": (
                             st.column_config.NumberColumn(format="€ %.2f")
                         ),
@@ -1040,18 +1031,3 @@ else:
                 "Run `uv run --no-sync python "
                 "scripts/uplift_sensitivity.py`."
             )
-
-
-st.sidebar.header("System Health")
-st.sidebar.info(f"Last Update: {datetime.now(timezone.utc).strftime('%H:%M:%S')} UTC")
-st.sidebar.markdown(
-    """
-**Automated Stack:**
-- [x] Churn Prediction API
-- [x] Ground Truth Join
-- [x] MLflow Registry
-- [x] Prefect Orchestration
-- [x] Prediction Logging
-- [x] Business Policy Analysis
-"""
-)
