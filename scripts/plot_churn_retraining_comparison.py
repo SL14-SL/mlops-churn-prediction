@@ -17,14 +17,26 @@ from sklearn.metrics import (
     precision_score,
     recall_score,
 )
+from mlops_churn_prediction.monitoring.theme import (
+    DARK_GREEN,
+    GREEN,
+    LIGHT_GREEN,
+    MINT,
+    MUTED_GREEN,
+    TERRACOTTA,
+    TEXT,
+    WHITE,
+)
 
 
-STATIC_COLOR = "#F05A40"
-ADAPTIVE_COLOR = "#5865F2"
-SCENARIO_COLOR = "#8C6BB1"
-SHIFT_COLOR = "#F6C85F"
-RETRAIN_COLOR = "#00A67E"
-PROMOTION_COLOR = "#2CA02C"
+STATIC_COLOR = TERRACOTTA
+ADAPTIVE_COLOR = GREEN
+SCENARIO_COLOR = DARK_GREEN
+SHIFT_COLOR = MINT
+RETRAIN_COLOR = DARK_GREEN
+PROMOTION_COLOR = MINT
+
+SHIFT_ALPHA = 0.18
 
 COHORT_SHIFT_SCENARIO = "controlled_real_cohort_shift"
 CONCEPT_DRIFT_SCENARIO = "controlled_synthetic_concept_drift"
@@ -324,7 +336,7 @@ def add_experiment_markers(
             day,
             f1_value,
             color=RETRAIN_COLOR,
-            edgecolor="white",
+            edgecolor=WHITE,
             linewidth=0.8,
             marker="D",
             s=75,
@@ -334,7 +346,7 @@ def add_experiment_markers(
             day,
             profit_value,
             color=RETRAIN_COLOR,
-            edgecolor="white",
+            edgecolor=WHITE,
             linewidth=0.8,
             marker="D",
             s=75,
@@ -351,7 +363,7 @@ def add_experiment_markers(
                 day,
                 f1_value,
                 color=PROMOTION_COLOR,
-                edgecolor="white",
+                edgecolor=WHITE,
                 linewidth=0.9,
                 marker="*",
                 s=180,
@@ -361,7 +373,7 @@ def add_experiment_markers(
                 day,
                 profit_value,
                 color=PROMOTION_COLOR,
-                edgecolor="white",
+                edgecolor=WHITE,
                 linewidth=0.9,
                 marker="*",
                 s=180,
@@ -646,6 +658,19 @@ def build_comparison_figure(
 
     plt.style.use("seaborn-v0_8-whitegrid")
 
+    plt.rcParams.update(
+        {
+            "figure.facecolor": WHITE,
+            "axes.facecolor": WHITE,
+            "axes.edgecolor": MUTED_GREEN,
+            "axes.labelcolor": TEXT,
+            "axes.titlecolor": TEXT,
+            "text.color": TEXT,
+            "xtick.color": TEXT,
+            "ytick.color": TEXT,
+            "grid.color": LIGHT_GREEN,
+        }
+    )
     figure, axes = plt.subplots(
         3,
         1,
@@ -717,7 +742,7 @@ def build_comparison_figure(
 
     profit_axis.axhline(
         0,
-        color="#666666",
+        color=TEXT,
         linewidth=1.2,
         linestyle="--",
         zorder=1,
@@ -738,7 +763,7 @@ def build_comparison_figure(
         0,
         profit_delta,
         where=(profit_delta >= 0),
-        color="#2CA02C",
+        color=GREEN,
         alpha=0.16,
         interpolate=True,
         label="Adaptive ahead",
@@ -758,13 +783,16 @@ def build_comparison_figure(
     profit_axis.set_ylabel("Cumulative simulated\nprofit uplift")
     profit_axis.set_xlabel("Simulation day")
     profit_axis.yaxis.set_major_formatter(FuncFormatter(lambda value, _: f"€{value:,.0f}"))
+    if profit_delta.abs().max() <= 1e-9:
+        profit_axis.set_ylim(-1, 1)
+        profit_axis.set_yticks([0])
 
     for axis in axes:
         axis.axvspan(
             shift_start - 0.5,
             shift_end + 0.5,
             color=SHIFT_COLOR,
-            alpha=0.18,
+            alpha=SHIFT_ALPHA,
             zorder=0,
         )
         axis.grid(
@@ -821,7 +849,7 @@ def build_comparison_figure(
         ),
         Patch(
             facecolor=SHIFT_COLOR,
-            alpha=0.3,
+            alpha=SHIFT_ALPHA,
             label=presentation["shift_label"],
         ),
         Line2D(
@@ -877,7 +905,7 @@ def build_comparison_figure(
         ha="center",
         va="center",
         fontsize=9.2,
-        color="#444444",
+        color=TEXT,
     )
 
     overlap_note = None
@@ -906,7 +934,7 @@ def build_comparison_figure(
             ha="center",
             va="center",
             fontsize=9,
-            color="#666666",
+            color=TEXT,
             style="italic",
         )
 
@@ -922,7 +950,7 @@ def build_comparison_figure(
         presentation["subtitle"],
         ha="center",
         fontsize=11,
-        color="#555555",
+        color=TEXT,
     )
     figure.text(
         0.5,
@@ -930,7 +958,7 @@ def build_comparison_figure(
         presentation["footer"],
         ha="center",
         fontsize=9,
-        color="#666666",
+        color=TEXT,
     )
 
     top_limit = 0.84 if overlap_note is not None else 0.86
@@ -952,7 +980,7 @@ def build_comparison_figure(
         output_path,
         dpi=200,
         bbox_inches="tight",
-        facecolor="white",
+        facecolor=WHITE,
     )
     plt.close(figure)
 
@@ -1002,15 +1030,15 @@ def build_f1_presentation_figure(
                 "axes.labelsize": 19,
                 "xtick.labelsize": 16,
                 "ytick.labelsize": 17,
-                "text.color": "#24342D",
-                "axes.labelcolor": "#24342D",
-                "xtick.color": "#24342D",
-                "ytick.color": "#24342D",
+                "text.color": TEXT,
+                "axes.labelcolor": TEXT,
+                "xtick.color": TEXT,
+                "ytick.color": TEXT,
             }
         ),
     ):
-        figure, axis = plt.subplots(figsize=(14, 6.5), facecolor="white")
-        axis.set_facecolor("white")
+        figure, axis = plt.subplots(figsize=(14, 6.5), facecolor=WHITE)
+        axis.set_facecolor(WHITE)
         adaptive_label = (
             "Adaptive lifecycle"
             if get_promotion_count(events) > 0
@@ -1043,7 +1071,7 @@ def build_f1_presentation_figure(
             shift_start - 0.5,
             shift_end + 0.5,
             color=SHIFT_COLOR,
-            alpha=0.20,
+            alpha=SHIFT_ALPHA,
             zorder=0,
         )
         handles = [static_line, adaptive_line]
@@ -1063,7 +1091,7 @@ def build_f1_presentation_figure(
                 marker="D",
                 s=100,
                 color=RETRAIN_COLOR,
-                edgecolor="white",
+                edgecolor=WHITE,
                 linewidth=1,
                 zorder=5,
                 label="Retraining executed",
@@ -1079,7 +1107,7 @@ def build_f1_presentation_figure(
                     marker="*",
                     s=300,
                     color=PROMOTION_COLOR,
-                    edgecolor="white",
+                    edgecolor=WHITE,
                     linewidth=1,
                     zorder=6,
                     label="Champion promoted",
@@ -1098,10 +1126,10 @@ def build_f1_presentation_figure(
         maximum_day = int(max(static["simulation_day"].max(), adaptive["simulation_day"].max()))
         step = max(1, (maximum_day - minimum_day + 9) // 10)
         axis.set_xticks(range(minimum_day, maximum_day + 1, step))
-        axis.grid(axis="y", color="#E1E7E3", linewidth=1)
+        axis.grid(axis="y", color=LIGHT_GREEN, linewidth=1)
         axis.set_axisbelow(True)
         axis.spines[["top", "right"]].set_visible(False)
-        axis.spines[["left", "bottom"]].set_color("#CDD5CF")
+        axis.spines[["left", "bottom"]].set_color(MUTED_GREEN)
         figure.suptitle(title, y=0.98, fontsize=22, fontweight="bold")
         figure.legend(
             handles=handles,
@@ -1112,7 +1140,7 @@ def build_f1_presentation_figure(
             fontsize=17,
         )
         event_handles.append(
-            Patch(facecolor=SHIFT_COLOR, alpha=0.3, label=presentation["shift_label"])
+            Patch(facecolor=SHIFT_COLOR, alpha=SHIFT_ALPHA, label=presentation["shift_label"])
         )
         axis.legend(
             handles=event_handles,
@@ -1128,11 +1156,11 @@ def build_f1_presentation_figure(
             f"Rolling F1 over up to {rolling_window_size} latest released labels. " + scenario_note,
             ha="center",
             fontsize=12,
-            color="#52665D",
+            color=TEXT,
         )
         figure.subplots_adjust(left=0.09, right=0.98, bottom=0.17, top=0.74)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        figure.savefig(output_path, dpi=200, bbox_inches="tight", facecolor="white")
+        figure.savefig(output_path, dpi=200, bbox_inches="tight", facecolor=WHITE)
         plt.close(figure)
     return output_path
 
